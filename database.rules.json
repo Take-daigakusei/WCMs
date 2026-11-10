@@ -1,0 +1,56 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      "$id": {
+        ".read": "auth != null",
+        ".write": "auth != null && (!data.exists() || data.child('expiresAt').val() < now)",
+        ".validate": "newData.hasChildren(['expiresAt']) && newData.child('expiresAt').isNumber()",
+        "rosterAt": { ".write": "auth != null", ".validate": "newData.isNumber()" },
+        "roster": {
+          ".write": "auth != null",
+          "$k": { ".validate": "newData.isString() && newData.val().length <= 30" }
+        },
+        "shops": {
+          ".write": "auth != null",
+          "$k": { ".validate": "newData.isString() && newData.val().length <= 20" }
+        },
+        "shopMin": {
+          ".write": "auth != null",
+          "$k": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 180" }
+        },
+        "shopUrl": {
+          ".write": "auth != null",
+          "$k": { ".validate": "newData.isString() && newData.val().length <= 300 && newData.val().matches(/^https?:\\/\\/.*/)" }
+        },
+        "afterUrl": {
+          ".write": "auth != null",
+          "$k": { ".validate": "newData.isString() && newData.val().length <= 300 && newData.val().matches(/^https?:\\/\\/.*/)" }
+        },
+        "hpShops": {
+          ".write": "auth != null",
+          "$k": { ".validate": "newData.isBoolean()" }
+        },
+        "afterHp": {
+          ".write": "auth != null",
+          "$k": { ".validate": "newData.isBoolean()" }
+        },
+        "afterShops": {
+          ".write": "auth != null",
+          "$k": { ".validate": "newData.isString() && newData.val().length <= 20" }
+        },
+        "afterLikes": {
+          ".write": "auth != null",
+          "$k": { "$p": { ".validate": "newData.isString() && newData.val().length <= 30" } }
+        },
+        "people": {
+          ".write": "auth != null",
+          "$k": {
+            ".validate": "newData.hasChildren(['name', 'st', 't']) && newData.child('name').isString() && newData.child('name').val().length <= 30 && (newData.child('st').val() === 'shop' || newData.child('st').val() === 'moving' || newData.child('st').val() === 'arrived') && (!newData.hasChild('shop') || (newData.child('shop').isString() && newData.child('shop').val().length <= 20)) && (!newData.hasChild('eta') || newData.child('eta').isNumber())"
+          }
+        }
+      }
+    }
+  }
+}

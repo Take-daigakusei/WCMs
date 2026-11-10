@@ -1,0 +1,18 @@
+# 名前などの個人情報を含む（コミットしない）
+*.xlsx
+*.csv
+input/
+output/
+
+# Firebase / clasp を使う場合のローカル設定
+.firebase/
+.clasp.json
+
+# その他
+*.bat
+__pycache__/
+.DS_Store
+Thumbs.db
+
+# Claude Code のローカル設定
+.claude/
