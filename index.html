@@ -122,6 +122,9 @@
     .top { display: flex; justify-content: space-between; align-items: center; padding: 0 4px; }
     .date { font-size: 1.15rem; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; }
     #remain { text-align: right; display: flex; align-items: center; gap: 6px; }
+    .top-r { display: flex; align-items: center; gap: 4px; }
+    button.icon { width: 40px; min-height: 40px; padding: 0; margin: -8px -8px -8px 0; background: none; border: 0; color: var(--text-muted); }
+    button.icon:active { background: var(--surface-2); }
     #openMsg:not(:empty)::before { content: ""; display: inline-block; width: 16px; height: 16px; margin-right: 8px; vertical-align: -3px; border: 2px solid var(--surface-2); border-top-color: var(--blue); border-radius: 50%; animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -232,6 +235,7 @@
     <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.5S3.5 15 3.5 9A4.5 4.5 0 0 1 12 6.8 4.5 4.5 0 0 1 20.5 9c0 6-8.5 11.5-8.5 11.5z"/></symbol>
     <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.8 0 5 2.2 5 5"/></symbol>
   </svg>
@@ -290,7 +294,10 @@
     <section id="room" class="screen">
       <div class="top">
         <div class="date" id="roomDate"></div>
-        <div class="muted" id="remain"></div>
+        <div class="top-r">
+          <div class="muted" id="remain"></div>
+          <button class="icon" id="settingsBtn" title="設定" aria-label="設定"><svg class="ic"><use href="#i-gear"/></svg></button>
+        </div>
       </div>
 
       <div class="pane" id="pane1">
@@ -1309,6 +1316,14 @@
       autoOpen = false;
       $('openMsg').textContent = ''; $('openBtn').hidden = false; $('openBtn').textContent = '今日のボードを開く';
     }
+    // ボードから設定（ホーム画面）へ。名前も、ボード上の自分の状況も、そのまま残す
+    function openSettings() {
+      cleanupRoomView();
+      autoOpen = false;
+      $('openMsg').textContent = ''; $('openBtn').hidden = false; $('openBtn').textContent = 'ボードにもどる';
+      $('homeErr').textContent = '';
+      $('apiDetails').open = true;
+    }
     function finishRoom(message) {
       cleanupRoomView();
       autoOpen = false;
@@ -1382,6 +1397,7 @@
     const once = fn => async (...a) => { if (busy) return; busy = true; try { return await fn(...a); } finally { busy = false; } };
     addShop = once(addShop); addAfter = once(addAfter);
     $('shopAddBtn').onclick = () => addShop();
+    $('settingsBtn').onclick = openSettings;
     $('heroName').onclick = renameClick;   // 名前の部分をタップすると、名前を選び直せる
     $('shopChange').onclick = () => { shopEdit = true; renderShops(); $('shopChange').hidden = true; $('shopSearch').focus(); };
     setupSuggest('shopSearch', 'hpList', info => addShop(info), () => shopEntries().map(s => s.name));
