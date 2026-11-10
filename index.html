@@ -1005,33 +1005,26 @@
       a.onclick = ev => ev.stopPropagation();
       return a;
     }
-    // ホットペッパーグルメ Webサービス（JSONPで呼ぶので、公開ページからでも使える）
-    function hpSearch(keyword) {
-      return new Promise((resolve, reject) => {
-        const cb = 'hpcb' + Date.now() + Math.floor(Math.random() * 1000);
-        const el = document.createElement('script');
-        let timer;
-        const done = fn => { clearTimeout(timer); delete window[cb]; el.remove(); fn(); };
-        timer = setTimeout(() => done(() => reject(new Error('timeout'))), 8000);
-        window[cb] = data => done(() => {
-          const r = data && data.results;
-          if (!r || r.error) reject(new Error((r && r.error && r.error[0] && r.error[0].message) || 'error'));
-          else resolve(r.shop || []);
-        });
-        el.onerror = () => done(() => reject(new Error('load')));
-        el.onload = () => setTimeout(() => { if (window[cb]) done(() => reject(new Error('badkey'))); }, 50);
-        el.src = 'https://webservice.recruit.co.jp/hotpepper/gourmet/v1/?' + new URLSearchParams({
-          key: hpKey, keyword, lat: ROTA.lat, lng: ROTA.lng, range: 5, count: 6, format: 'jsonp', callback: cb,
-        });
-        document.head.appendChild(el);
-      });
+    // ホットペッパーグルメ Webサービス。ブラウザからは直接呼べない（JSONP も CORS も非対応）ので、
+    // 出欠アプリのサーバーに中継してもらう。サーバーは結果を保存しない
+    async function hpSearch(keyword) {
+      if (!hasApi()) throw new Error('noapi');
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 10000);
+      let json;
+      try {
+        const res = await fetch(api.url + (api.url.includes('?') ? '&' : '?') + new URLSearchParams({ api: 'shopSearch', key: hpKey, q: keyword }), { signal: ctl.signal });
+        json = await res.json();
+      } catch (e) { throw new Error('timeout'); }
+      finally { clearTimeout(timer); }
+      if (!json || !json.ok) throw new Error((json && json.error) || 'failed');
+      return json.shops || [];
     }
     const hpErrText = e => {
       const m = (e && e.message) || '';
-      if (m === 'badkey' || /キー/.test(m)) return 'ホットペッパーのキーが正しくないようです。右上の設定で、キーを入れ直してください';
-      // キーがまちがっていると、ブラウザは返事（XML）を読み込めず 'load' になる
-      if (m === 'load') return 'ホットペッパーで検索できませんでした。キーがまちがっている可能性が高いです。右上の設定で、キーを入れ直してください';
-      if (m === 'timeout') return 'ホットペッパーにつながりませんでした。下のボタンで、名前だけで追加できます';
+      if (m === 'badkey') return 'ホットペッパーのキーが正しくないようです。右上の設定で、キーを入れ直してください';
+      if (m === 'noapi') return '出欠アプリのURLが入っていないため、お店の検索が使えません。配られたリンクから開き直してください';
+      if (m === 'timeout') return 'お店の検索につながりませんでした。下のボタンで、名前だけで追加できます';
       return 'ホットペッパーで検索できませんでした（' + m + '）。下のボタンで、名前だけで追加できます';
     };
     function hpInfo(sh) {
@@ -1430,7 +1423,7 @@
     $('apiLinkBtn').onclick = copyApiLink;
 
     // 思わぬエラーは、画面に出す（スマホでは原因が見えないため）
-    window.addEventListener('error', e => /^Script error/i.test(e.message || '') || toast('エラー：' + (e.message || '') + (e.lineno ? '（' + e.lineno + '行目）' : ''), true, 10000));
+    window.addEventListener('error', e => toast('エラー：' + (e.message || '') + (e.lineno ? '（' + e.lineno + '行目）' : ''), true, 10000));
     window.addEventListener('unhandledrejection', e => toast('エラー：' + ((e.reason && e.reason.message) || e.reason || ''), true, 10000));
 
     (async () => {
