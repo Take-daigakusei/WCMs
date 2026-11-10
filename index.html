@@ -65,7 +65,14 @@
     #pane1 .hero { margin-top: auto; position: sticky; bottom: 0; z-index: 5; box-shadow: 0 0 0 var(--gap) var(--bg); }
     .bnav { display: none; flex: none; background: var(--surface); border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom); }
     body.in-room .bnav { display: flex; }
-    body.in-room #room { padding-bottom: var(--gap); }
+    body.in-room #room { padding: 10px var(--gap) 12px; gap: 12px; }
+    /* ボードの中では、上の帯（アプリ名）を畳んで場所を空ける。「オフライン」の印だけ残す */
+    body.in-room header { padding: env(safe-area-inset-top) var(--gap) 0; border-bottom: 0; justify-content: flex-end; }
+    body.in-room header > :not(#modeBadge) { display: none; }
+    body.in-room header #modeBadge:not(:empty) { margin-top: 6px; }
+    #room .pane { gap: 12px; }
+    #room .card { padding: 14px; }
+    #room .card > * + *, #room #withBlock > * + * { margin-top: 10px; }
     body.in-room .toast { bottom: auto; top: calc(12px + env(safe-area-inset-top)); transform: translateX(-50%) translateY(-300px); }
     body.in-room .toast.show { transform: translateX(-50%) translateY(0); }
     .bnav button { flex: 1; width: auto; min-height: 58px; padding: 8px 4px 10px; border: 0; border-radius: 0; background: none; color: var(--text-muted); flex-direction: column; gap: 3px; font-size: 0.72rem; font-weight: 600; position: relative; }
@@ -113,29 +120,29 @@
     .err:empty { display: none; }
 
     .top { display: flex; justify-content: space-between; align-items: center; padding: 0 4px; }
-    .date { font-size: 1.4rem; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; }
+    .date { font-size: 1.15rem; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; }
     #remain { text-align: right; display: flex; align-items: center; gap: 6px; }
     #openMsg:not(:empty)::before { content: ""; display: inline-block; width: 16px; height: 16px; margin-right: 8px; vertical-align: -3px; border: 2px solid var(--surface-2); border-top-color: var(--blue); border-radius: 50%; animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* 自分のカード */
-    .hero { background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--border-mid); border-radius: var(--radius-lg); padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+    .hero { background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--border-mid); border-radius: var(--radius-lg); padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
     .hero.shop { border-top-color: var(--blue); }
     .hero.moving { border-top-color: var(--amber); }
     .hero.arrived { border-top-color: var(--green); }
-    .hero > * + * { margin-top: 10px; }
-    .hero-head { display: flex; justify-content: space-between; align-items: center; }
+    .hero > * + * { margin-top: 8px; }
+    .hero-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 28px; }
     .hero-user { font-size: 1.05rem; font-weight: 700; display: flex; align-items: center; gap: 8px; min-width: 0; }
     .hero-user span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #heroName { cursor: pointer; }
-    .hero-sub { font-size: 0.85rem; color: var(--text-sub); }
+    .hero-sub { font-size: 0.8rem; line-height: 1.3; color: var(--text-sub); text-align: right; min-width: 0; }
     .hero-row { display: flex; justify-content: space-between; align-items: center; }
     .pill { font-size: 0.78rem; font-weight: 600; padding: 3px 9px; border-radius: 9999px; border: 1px solid var(--border-mid); background: var(--surface-2); color: var(--text-muted); flex: none; }
     .pill.shop { background: var(--blue-soft); color: var(--blue); border-color: rgba(59,130,246,0.3); }
     .pill.moving { background: var(--amber-soft); color: var(--amber); border-color: rgba(245,158,11,0.3); }
     .pill.arrived { background: var(--green-soft); color: var(--green); border-color: rgba(34,197,94,0.3); }
     .quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .qbtn { flex-direction: column; gap: 6px; min-height: 78px; padding: 14px 4px; font-size: 0.85rem; font-weight: 700; background: var(--surface-2); color: var(--text); border-color: var(--border-mid); }
+    .qbtn { flex-direction: column; gap: 3px; min-height: 60px; padding: 8px 4px; font-size: 0.85rem; font-weight: 700; background: var(--surface-2); color: var(--text); border-color: var(--border-mid); }
     .qbtn:active { background: #374151; transform: scale(.97); }
     .qbtn.off { opacity: .5; }
     .qbtn small { font-size: 0.68rem; font-weight: 500; }
@@ -145,7 +152,7 @@
 
     /* 一覧：1行ごとに角丸の枠。選んだ行は薄い青 */
     .shoplist { max-height: 260px; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
-    .shoplist label { display: flex; align-items: center; gap: 12px; padding: 13px 14px; font-size: 0.95rem; color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: background .12s, border-color .12s; }
+    .shoplist label { display: flex; align-items: center; gap: 12px; padding: 11px 14px; font-size: 0.95rem; color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: background .12s, border-color .12s; }
     .shoplist label:active { background: var(--surface-2); }
     .shoplist label.sel { background: var(--blue-soft); border-color: rgba(59,130,246,0.3); font-weight: 600; }
     .shoplist input { width: 22px; height: 22px; padding: 0; margin: 0; flex: none; appearance: none; -webkit-appearance: none; position: relative; background: transparent; border: 1.5px solid var(--border-mid); box-shadow: none; }
@@ -278,10 +285,7 @@
     <!-- ボード -->
     <section id="room" class="screen">
       <div class="top">
-        <div>
-          <div class="muted">今日のボード</div>
-          <div class="date" id="roomDate"></div>
-        </div>
+        <div class="date" id="roomDate"></div>
         <div class="muted" id="remain"></div>
       </div>
 
@@ -297,7 +301,7 @@
 
         <div id="withBlock" hidden>
           <p class="section-label"><svg class="ic"><use href="#i-users"/></svg> <span id="withTitle"></span> <span id="withSummary"></span></p>
-          <p class="hint">チェックした人は、すぐ同じ状況になります。お店を選び直したときや、下の切り替えも、チェックした人にまとめて反映されます。アプリを使っていない人も追加できます。</p>
+          <p class="hint">チェックした人も、同じ状況になります</p>
           <input id="withSearch" type="search" placeholder="名前を検索" autocomplete="off">
           <div class="shoplist" id="withList"></div>
         </div>
@@ -307,9 +311,9 @@
       <div class="hero" id="hero">
         <div class="hero-head">
           <div class="hero-user"><svg class="ic"><use href="#i-user"/></svg><span id="heroName"></span></div>
+          <div class="hero-sub" id="meStatus"></div>
           <span class="pill" id="heroPill"></span>
         </div>
-        <div class="hero-sub" id="meStatus"></div>
         <div class="quick">
           <button id="qShop" class="qbtn"></button>
           <button id="qMove" class="qbtn"></button>
@@ -1184,6 +1188,7 @@
       const more = withKeys.size && myStatus !== 'none' ? `・いっしょの${withKeys.size}人も反映` : '';
       $('meStatus').textContent = { none: '', shop: `${myShop} にいます`, moving: (myShop ? `${myShop} からロタへ` : 'ロタへ向かっています') + (myEta ? `・ロタ着予定 ${fmtClock(myEta)}ごろ` : ''), arrived: 'ロタに着きました' }[myStatus] + more;
       $('meStatus').hidden = !$('meStatus').textContent;
+      $('heroPill').hidden = myStatus !== 'none';   // 状況の文が出ているときは、印は重複なので出さない
       [['qShop', 'shop', 'fork', 'お店にいる'], ['qMove', 'moving', 'walk', 'ロタへ向かう'], ['qArrive', 'arrived', 'flag', 'ロタに着いた']].forEach(([id, st, icon, label]) => {
         const b = $(id);
         b.className = 'qbtn ' + st + (myStatus === st ? ' on' : '') + (st === 'shop' && !myShop ? ' off' : '');
