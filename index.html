@@ -1085,10 +1085,11 @@
     }
     function hideSuggest(listId) { const b = $(listId); b.hidden = true; b.innerHTML = ''; }
     // 入力欄に文字を入れると、ホットペッパーで検索して候補を出す（キーが入っているときだけ）
-    function setupSuggest(inputId, listId, onPick, listed) {
+    function setupSuggest(inputId, listId, onPick, listed, memoOf, regulars) {
       const input = $(inputId), box = $(listId);
       let timer = null, token = 0;
-      // 前に使ったお店（いまの一覧にないもの）を、新しい順に5件まで出す。通信は使わない
+      // 前に使ったお店・いつものお店（いまの一覧にないもの）を出す。通信は使わない。
+      // 一次会と二次会は別々：memoOf() はその欄の履歴、regulars はその欄の「いつものお店」
       const addLocal = () => {
         const raw = input.value.trim();
         if (/^https?:/i.test(raw)) return;
@@ -1097,10 +1098,10 @@
         const kq = kana(q);
         const hit = (n, alt) => !have.has(norm(n)) && (!kq || [n, ...(alt || [])].some(x => kana(norm(x)).includes(kq)));
         // 前に使ったお店（新しい順）→ いつものお店 の順
-        const memo = Object.entries(shopMemo).filter(([n]) => hit(n)).sort((a, b) => b[1].at - a[1].at)
+        const memo = Object.entries(memoOf()).filter(([n]) => hit(n)).sort((a, b) => b[1].at - a[1].at)
           .map(([n, m]) => ({ name: n, url: safeUrl(m.url), label: '前に使ったお店' }));
         const seen = new Set(memo.map(m => norm(m.name)));
-        const regular = REGULAR_SHOPS.filter(r => hit(r.name, r.alt) && !seen.has(norm(r.name)))
+        const regular = regulars.filter(r => hit(r.name, r.alt) && !seen.has(norm(r.name)))
           .map(r => ({ name: r.name.slice(0, 20), url: '', label: 'いつものお店' }));
         [...memo, ...regular].slice(0, 8).forEach(m => {
           const it = document.createElement('div'); it.className = 'item';
@@ -1163,20 +1164,25 @@
       return 2 * R * Math.asin(Math.sqrt(h));
     }
     // 前に使ったお店を端末に覚えておく（名前・リンク）。次からは候補に出て、1タップで載せられる。
-    // ホットペッパー由来の情報は覚えない（規約に合わせて保存しない）
-    let shopMemo = load('shops', {});   // 名前 → { url, at }
-    function rememberShops() {
-      const shops = roomData.shops || {}, urls = roomData.shopUrl || {}, hp = roomData.hpShops || {};
+    // ホットペッパー由来の情報は覚えない（規約に合わせて保存しない）。
+    // 一次会のお店と二次会の候補は、別々に覚える（二次会の欄に、一次会のお店が出ないように）
+    let shopMemo = load('shops', {});    // 一次会：名前 → { url, at }
+    let afterMemo = load('afters', {});  // 二次会：名前 → { url, at }
+    function rememberInto(memo, names, urls, hp) {
       let changed = false;
-      Object.entries(shops).forEach(([k, name]) => {
-        if (hp[k]) return;
-        const old = shopMemo[name], url = safeUrl(urls[k]);
+      Object.entries(names || {}).forEach(([k, name]) => {
+        if (hp && hp[k]) return;
+        const old = memo[name], url = safeUrl(urls && urls[k]);
         if (old && old.url === url) return;
-        shopMemo[name] = { url, at: Date.now() }; changed = true;
+        memo[name] = { url, at: Date.now() }; changed = true;
       });
-      if (!changed) return;
-      const keep = Object.entries(shopMemo).sort((a, b) => b[1].at - a[1].at).slice(0, 40);
-      shopMemo = Object.fromEntries(keep); save('shops', shopMemo);
+      return changed ? Object.fromEntries(Object.entries(memo).sort((x, y) => y[1].at - x[1].at).slice(0, 40)) : null;
+    }
+    function rememberShops() {
+      const a = rememberInto(shopMemo, roomData.shops, roomData.shopUrl, roomData.hpShops);
+      if (a) { shopMemo = a; save('shops', shopMemo); }
+      const b = rememberInto(afterMemo, roomData.afterShops, roomData.afterUrl, roomData.afterHp);
+      if (b) { afterMemo = b; save('afters', afterMemo); }
     }
 
     // 「いっしょに行く人」のチェック一覧
@@ -1374,8 +1380,8 @@
     $('settingsBtn').onclick = openSettings;
     $('heroName').onclick = renameClick;   // 名前の部分をタップすると、名前を選び直せる
     $('shopChange').onclick = () => { shopEdit = true; renderShops(); $('shopChange').hidden = true; $('shopSearch').focus(); };
-    setupSuggest('shopSearch', 'hpList', info => addShop(info), () => shopEntries().map(s => s.name));
-    setupSuggest('afterShop', 'afterSug', info => addAfter(info), () => afterEntries().map(s => s.name));
+    setupSuggest('shopSearch', 'hpList', info => addShop(info), () => shopEntries().map(s => s.name), () => shopMemo, REGULAR_SHOPS);
+    setupSuggest('afterShop', 'afterSug', info => addAfter(info), () => afterEntries().map(s => s.name), () => afterMemo, []);   // 二次会には、一次会の履歴・いつものお店を出さない
     $('withSearch').oninput = renderWith;
     $('afterShopBtn').onclick = () => addAfter();
     $('afterShop').oninput = renderAfter;
