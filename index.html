@@ -1266,6 +1266,7 @@
       if (h.get('u') && /^https:\/\/script\.google\.com\//.test(h.get('u'))) {
         api = { url: h.get('u') }; save('api', api); used = true;
       }
+      if (h.has('admin')) { save('admin', true); used = true; }   // 管理者（幹事）の端末だけ、設定を出す
       if (h.has('k') || h.has('h')) used = true;   // 昔のリンクのキー（連携・お店検索）は使わない（アドレスからは消す）
       // 名前：未登録の端末はそのまま登録。別の名前で登録済みなら、勝手に変えずに確認する
       const n = (h.get('n') || '').replace(/\s+/g, ' ').trim().slice(0, 30);
@@ -1276,12 +1277,16 @@
       if (used) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
     })();
     // すでに開いているタブでリンクを踏んだとき（読み込み直しが起きない）も、設定を取り込む
-    window.addEventListener('hashchange', () => { if (/[#&][unhk]=/.test(location.hash)) location.reload(); });
+    window.addEventListener('hashchange', () => { if (/[#&](?:[unhk]=|admin)/.test(location.hash)) location.reload(); });
 
     // ============================================================
     // 起動
     // ============================================================
     if (api) $('apiUrl').value = api.url || '';
+    // 設定（出欠アプリのURLなど）は、管理者の端末にだけ出す。メンバーの画面には歯車もURL欄も出ない
+    const isAdmin = load('admin', false) === true;
+    $('settingsBtn').style.display = isAdmin ? '' : 'none';
+    $('setupCard').hidden = !isAdmin;
     $('modeBadge').textContent = hasFirebase ? '' : 'お試し';
     $('demoNotice').hidden = hasFirebase;
     $('openBtn').onclick = () => { autoOpen = true; openToday(); };
