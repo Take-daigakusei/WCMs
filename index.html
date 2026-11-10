@@ -196,7 +196,9 @@
     .cands { display: flex; flex-direction: column; gap: 8px; }
     .cand { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); }
     .heart { width: 40px; height: 40px; min-height: 0; padding: 0; flex: none; background: transparent; color: var(--text-muted); border: 1px solid var(--border-mid); border-radius: 50%; }
+    .heart { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }   /* 長押しでメニューや選択が出ないように */
     .heart:active { background: var(--surface-2); }
+    .clikers { font-size: 0.78rem; color: var(--text-sub); margin-top: 2px; }
     .heart .ic { width: 20px; height: 20px; }
     .heart.on { color: #fb7185; border-color: #fb7185; background: rgba(251,113,133,0.1); }
     .heart.on .ic { fill: currentColor; }
@@ -330,7 +332,7 @@
       <div class="pane" id="pane2" hidden>
       <div class="card">
         <p class="card-title"><span class="t"><svg class="ic"><use href="#i-glass"/></svg>二次会の候補</span><span class="card-title-count" id="afterNow"></span></p>
-        <p class="hint">だれでも候補を出せます。行きたいお店にハートを付けて、行きたい人を募ります。</p>
+        <p class="hint">だれでも候補を出せます。行きたいお店のハートを押してください。ハートを長押しすると、押した人の名前が出ます。</p>
         <input id="afterShop" placeholder="お店の名前を入れて追加" autocomplete="off">
         <div class="sug" id="afterSug" hidden></div>
         <button id="afterShopBtn" class="sub dash" hidden></button>
@@ -846,6 +848,8 @@
       backend.setLike(roomId, key, myKey(), liked ? null : myName)
         .catch(e => { roomErr.textContent = '送信に失敗しました：' + (e.message || e); });
     }
+    const openLikers = new Set();   // 「行きたい人」の名前を開いている候補（キー）
+    let skipClickUntil = 0;
     function renderAfter() {
       if (!roomData) return;
       const list = afterEntries();
@@ -864,17 +868,31 @@
         const row = document.createElement('div'); row.className = 'cand';
         const h = document.createElement('button');
         h.className = 'heart' + (liked ? ' on' : ''); h.title = liked ? '行きたいを取り消す' : '行きたい';
-        h.innerHTML = ic('heart'); h.setAttribute('aria-pressed', liked ? 'true' : 'false'); h.onclick = () => toggleLike(c.key, liked);
-        // ハートの下に、押した人数だけ出す（名前は出さない）
+        h.innerHTML = ic('heart'); h.setAttribute('aria-pressed', liked ? 'true' : 'false');
+        // 押す：行きたいの切り替え。長押し（0.5秒）：押した人の名前を、店名の下に出す／しまう
+        const likers = document.createElement('div'); likers.className = 'clikers';
+        likers.textContent = c.likes.length ? '行きたい人：' + c.likes.map(([, n]) => n).sort(ja).join('、') : 'まだ誰も押していません';
+        likers.hidden = !openLikers.has(c.key);
+        const showLikers = () => {
+          if (openLikers.has(c.key)) openLikers.delete(c.key); else openLikers.add(c.key);
+          likers.hidden = !openLikers.has(c.key);   // 一覧は作り直さない（押している最中のボタンが入れ替わらないように）
+        };
+        let timer = null;
+        const stop = () => clearTimeout(timer);
+        h.addEventListener('pointerdown', () => { stop(); timer = setTimeout(() => { skipClickUntil = Date.now() + 800; showLikers(); }, 500); });
+        ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => h.addEventListener(ev, stop));
+        h.oncontextmenu = ev => ev.preventDefault();
+        h.onclick = () => { if (Date.now() < skipClickUntil) { skipClickUntil = 0; return; } toggleLike(c.key, liked); };   // 長押しの直後の「押した」は無視する
+        // ハートの下に、押した人数を出す（数字を押しても、名前を出せる）
         const cnt = document.createElement('div'); cnt.className = 'ccnt' + (c.likes.length ? ' has' : '');
-        cnt.textContent = c.likes.length;
+        cnt.textContent = c.likes.length; cnt.onclick = showLikers;
         const heart = document.createElement('div'); heart.className = 'cheart';
         heart.append(h, cnt);
         const main = document.createElement('div'); main.className = 'cmain';
         const nm = document.createElement('div'); nm.className = 'cname'; nm.textContent = c.name;
         const au = safeUrl(roomData.afterUrl && roomData.afterUrl[c.key]) || (roomData.afterHp && roomData.afterHp[c.key] ? safeUrl((hpLookup(c.name) || {}).url) : '');
         if (au) nm.appendChild(linkEl(au));
-        main.append(nm);
+        main.append(nm, likers);
         row.append(heart, main);
         if (!c.likes.length) {   // だれも行きたくない候補は、まちがい追加を消せる
           const d = document.createElement('button'); d.className = 'cdel'; d.title = '候補から消す'; d.innerHTML = ic('x');
