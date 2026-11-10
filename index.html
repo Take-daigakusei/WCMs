@@ -177,8 +177,7 @@
     .sug .item:active { background: var(--surface-2); }
     .sug .nm { font-size: 0.95rem; font-weight: 600; }
     .sug .sb { font-size: 0.75rem; color: var(--text-muted); }
-    .sug .credit { padding: 8px 14px; font-size: 0.7rem; color: var(--text-muted); }
-    .sug .credit a, .lnk { color: var(--text-muted); }
+    .lnk { color: var(--text-muted); }
     .lnk { display: inline-flex; vertical-align: middle; margin-left: 6px; }
 
     .sec + .sec { margin-top: var(--gap); }
@@ -223,8 +222,6 @@
     .cmain { flex: 1; min-width: 0; }
     .cname { font-size: 0.95rem; font-weight: 600; }
     .cdel { width: 28px; height: 28px; min-height: 0; padding: 0; flex: none; background: transparent; color: var(--text-muted); border: 0; }
-    .credit-line { font-size: 0.7rem; text-align: center; }
-    .credit-line a { color: var(--text-muted); }
     .divider { border: 0; border-top: 1px solid var(--border); margin: var(--gap) 0; }
 
     /* トースト：操作したことを下に短く出す */
@@ -286,15 +283,12 @@
 
       <div class="card" id="setupCard">
         <details id="apiDetails">
-          <summary class="muted">出欠アプリ・お店検索の設定（最初の1回だけ）</summary>
+          <summary class="muted">出欠アプリの設定（最初の1回だけ）</summary>
           <label for="apiUrl">出欠アプリのURL</label>
           <input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
           <button id="apiSaveBtn" class="sub">保存する</button>
-          <label for="hpKey">ホットペッパーAPIキー（お店の検索用・任意）</label>
-          <input id="hpKey" type="text" inputmode="latin" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
-          <button id="hpSaveBtn" class="sub">キーを保存</button>
           <button id="apiLinkBtn" class="sub">メンバーに配るリンクをコピー</button>
-          <p class="muted">配るリンクに入るのは、出欠アプリのURLとお店検索のキーだけです（名簿を読むためのキーはありません）。メンバーは一度そのリンクを開けば、あとは普通に開くだけで使えます。</p>
+          <p class="muted">配るリンクに入るのは、出欠アプリのURLだけです（キーの類は入りません）。メンバーは一度そのリンクを開けば、あとは普通に開くだけで使えます。</p>
         </details>
       </div>
 
@@ -315,7 +309,7 @@
       <div class="card">
         <p class="card-title"><span class="t"><svg class="ic"><use href="#i-fork"/></svg>お店を選ぶ</span></p>
         <input id="shopSearch" type="search" placeholder="お店の名前を入れて追加" autocomplete="off">
-        <div class="sug" id="hpList" hidden></div>
+        <div class="sug" id="shopSug" hidden></div>
         <div class="shoplist" id="shopList"></div>
         <button id="shopAddBtn" class="sub dash" hidden></button>
         <p class="hint" id="shopHint" hidden>選んでいるお店をもう一度押すと、取り消せます</p>
@@ -363,7 +357,7 @@
       </div>
       </div>
 
-      <p class="credit-line" id="hpCredit" hidden><a href="https://webservice.recruit.co.jp/" target="_blank" rel="noopener noreferrer">Powered by ホットペッパー グルメ Webサービス</a></p>
+
     </section>
   </main>
 
@@ -407,10 +401,9 @@
     const STORE_PREFIX = 'wcms_';
     const ROSTER_STALE_MS = 30 * 60000;   // 出席者名簿をこれより古ければ、開いたときに取り込み直す
     const DAY_START_HOUR = 4;             // ボードの1日は朝4時に切り替わる（深夜の二次会まで同じボード）
-    const ROTA = { lat: 35.7128, lng: 139.7038 };   // 高田馬場駅前（だいたいの位置）
 
     // ---------- いつものお店（サークルでよく行くお店）----------
-    // ここに書いたお店は、全員の端末で、検索欄の候補に最初から出る（ホットペッパーに載っていない店もOK）。
+    // ここに書いたお店は、全員の端末で、検索欄の候補に最初から出る。
     // name: 店名（20文字まで） / alt: 別の書き方（「タレカツ」「マクドナルド」など）。これで打っても候補に出る
     const REGULAR_SHOPS = [
       { name: 'やったる', alt: ['らあ麺 やったる', 'らぁ麺 やったる'] },                       // 高田馬場2-16-4
@@ -630,7 +623,7 @@
     // ============================================================
     let api = load('api', null);   // { url }
     if (api && api.key) { api = { url: api.url }; save('api', api); }   // 昔の連携キーが残っていたら捨てる
-    let hpKey = load('hp', '');    // ホットペッパーAPIキー（お店の検索用）
+    remove('hp');   // 以前のお店検索（ホットペッパー）のキーが端末に残っていたら消す
     const hasApi = () => !!(api && api.url);
 
     // 出欠アプリのサーバーに「今日の名簿をボードに入れて」と合図を送る。
@@ -863,10 +856,7 @@
       const key = dup ? dup.key : mapKey(name);
       try {
         if (!dup) await backend.addAfterShop(roomId, key, name);
-        if (info.fromHp) {
-          await backend.setLink(roomId, 'afterHp', key, true);   // ホットペッパー由来の印だけ保存（リンクはその都度検索）
-          hpCache[name] = { at: Date.now(), done: true, url: info.url, min: null };
-        } else if (info.url) await backend.setLink(roomId, 'afterUrl', key, info.url);
+        if (info.url) await backend.setLink(roomId, 'afterUrl', key, info.url);
         if (!dup || !dup.likes.some(([k]) => k === myKey())) await backend.setLike(roomId, key, myKey(), myName);   // 出した人は、まず自分が行きたい
       } catch (e) { roomErr.textContent = '追加できませんでした：' + (e.message || e); return; }
       $('afterShop').value = ''; hideSuggest('afterSug'); toast(`${name}を二次会の候補に追加しました`);
@@ -912,7 +902,7 @@
         heart.append(h, cnt);
         const main = document.createElement('div'); main.className = 'cmain';
         const nm = document.createElement('div'); nm.className = 'cname'; nm.textContent = c.name;
-        const au = safeUrl(roomData.afterUrl && roomData.afterUrl[c.key]) || (roomData.afterHp && roomData.afterHp[c.key] ? safeUrl((hpLookup(c.name) || {}).url) : '');
+        const au = safeUrl(roomData.afterUrl && roomData.afterUrl[c.key]);
         if (au) nm.appendChild(linkEl(au));
         main.append(nm);
         row.append(heart, main);
@@ -986,7 +976,7 @@
       // お店を選んだら、検索欄とほかの候補は畳んで、選んだお店だけを見せる（空いた所に「いっしょの人」が来る）
       const folded = myStatus !== 'none' && !!myShop && !shopEdit && shopEntries().some(s => s.name === myShop);
       $('shopSearch').hidden = folded;
-      if (folded) { $('shopSearch').value = ''; $('hpList').hidden = true; }
+      if (folded) { $('shopSearch').value = ''; $('shopSug').hidden = true; }
       $('shopChange').hidden = !(folded && myStatus !== 'shop');
       const q = $('shopSearch').value.trim();
       const qn = norm(q);
@@ -1045,20 +1035,13 @@
       try {
         if (!existing) await backend.addShop(roomId, key, name);
         const k = existing ? existing.key : key;
-        if (info.fromHp) {
-          // ホットペッパーの情報（URL・場所）はデータベースに保存しない。「ホットペッパー由来」の印だけ残し、
-          // リンクは、各端末がその都度ホットペッパーで検索して出す
-          await backend.setLink(roomId, 'hpShops', k, true);
-          hpCache[name] = { at: Date.now(), done: true, url: info.url };
-        } else {
-          if (info.url) await backend.setLink(roomId, 'shopUrl', k, info.url);
-        }
+        if (info.url) await backend.setLink(roomId, 'shopUrl', k, info.url);
       } catch (e) { roomErr.textContent = '追加できませんでした：' + (e.message || e); return; }
-      $('shopSearch').value = ''; hideSuggest('hpList');
+      $('shopSearch').value = ''; hideSuggest('shopSug');
       setStatus(myStatus === 'none' ? 'shop' : myStatus, existing ? existing.name : name);
     }
 
-    // ---------- お店の検索（ホットペッパー）と、GoogleマップのURLの取り込み ----------
+    // ---------- お店のリンクと、GoogleマップのURLの取り込み ----------
     function safeUrl(u) { return typeof u === 'string' && /^https?:\/\//i.test(u) ? u : ''; }
     function linkEl(url) {
       const a = document.createElement('a');
@@ -1067,58 +1050,10 @@
       a.onclick = ev => ev.stopPropagation();
       return a;
     }
-    // ホットペッパーグルメ Webサービス。ブラウザからは直接呼べない（JSONP も CORS も非対応）ので、
-    // 出欠アプリのサーバーに中継してもらう。サーバーは結果を保存しない
-    async function hpSearch(keyword) {
-      if (!hasApi()) throw new Error('noapi');
-      const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), 10000);
-      let json;
-      try {
-        const res = await fetch(api.url + (api.url.includes('?') ? '&' : '?') + new URLSearchParams({ api: 'shopSearch', key: hpKey, q: keyword }), { signal: ctl.signal });
-        json = await res.json();
-      } catch (e) { throw new Error('timeout'); }
-      finally { clearTimeout(timer); }
-      if (!json || !json.ok) throw new Error((json && json.error) || 'failed');
-      return json.shops || [];
-    }
-    const hpErrText = e => {
-      const m = (e && e.message) || '';
-      if (m === 'badkey') return 'ホットペッパーのキーが正しくないようです。右上の設定で、キーを入れ直してください';
-      if (m === 'noapi') return '出欠アプリのURLが入っていないため、お店の検索が使えません。配られたリンクから開き直してください';
-      if (m === 'timeout') return 'お店の検索につながりませんでした。下のボタンで、名前だけで追加できます';
-      return 'ホットペッパーで検索できませんでした（' + m + '）。下のボタンで、名前だけで追加できます';
-    };
-    function hpInfo(sh) {
-      const name = String(sh.name || '').trim().slice(0, 20);
-      if (!name) return null;
-      const lat = +sh.lat, lng = +sh.lng;
-      return { name, lat: isFinite(lat) ? lat : null, lng: isFinite(lng) ? lng : null, url: safeUrl(sh.urls && sh.urls.pc), fromHp: true };
-    }
-    // ホットペッパー由来のお店のリンクは、端末のメモリにだけ置く（保存しない・再読み込みや1時間で消えて取り直す）
-    const hpCache = {};   // お店の名前 → { at, done, url }
-    const HP_TTL = 3600000;
-    function hpLookup(name) {
-      if (!hpKey) return null;
-      const c = hpCache[name];
-      if (c && Date.now() - c.at < HP_TTL) return c;
-      const e = { at: Date.now(), done: false, url: '' };
-      hpCache[name] = e;
-      hpSearch(name).then(list => {
-        const infos = list.map(hpInfo).filter(Boolean);
-        const hit = infos.find(i => i.name === name) || infos.sort((a, b) => (a.lat == null) - (b.lat == null)
-          || distM(a, ROTA) - distM(b, ROTA))[0];   // 同じ名前がなければ、ロタにいちばん近いもの
-        if (hit) e.url = hit.url;
-        e.done = true;
-        if (roomData) render();
-      }).catch(() => { e.done = true; });
-      return e;
-    }
-    // お店のリンク：Googleマップのものは保存された値、ホットペッパー由来のものはその都度の検索結果
+    // お店のリンク（GoogleマップのURLで追加したお店だけ）
     function shopExtra(name) {
       const key = mapKey(name);
-      const hp = roomData.hpShops && roomData.hpShops[key] ? hpLookup(name) : null;
-      return { url: safeUrl(roomData.shopUrl && roomData.shopUrl[key]) || safeUrl(hp && hp.url) };
+      return { url: safeUrl(roomData.shopUrl && roomData.shopUrl[key]) };
     }
     // GoogleマップのURLからお店の名前・場所・ページを読み取る（短縮URLは中身が見えないので不可）
     function parseMapsUrl(text) {
@@ -1134,10 +1069,9 @@
       return { name: name.slice(0, 20), lat: c ? +c[1] : null, lng: c ? +c[2] : null, url };
     }
     function hideSuggest(listId) { const b = $(listId); b.hidden = true; b.innerHTML = ''; }
-    // 入力欄に文字を入れると、ホットペッパーで検索して候補を出す（キーが入っているときだけ）
+    // 入力欄をタップ・入力すると、前に使ったお店・いつものお店を候補に出す
     function setupSuggest(inputId, listId, onPick, listed, memoOf, regulars) {
       const input = $(inputId), box = $(listId);
-      let timer = null, token = 0;
       // 前に使ったお店・いつものお店（いまの一覧にないもの）を出す。通信は使わない。
       // 一次会と二次会は別々：memoOf() はその欄の履歴、regulars はその欄の「いつものお店」
       const addLocal = () => {
@@ -1165,63 +1099,16 @@
       };
       input.addEventListener('focus', () => { if (!input.value.trim()) { hideSuggest(listId); addLocal(); } });
       input.addEventListener('blur', () => setTimeout(() => { if (!input.value.trim()) hideSuggest(listId); }, 250));
-      input.addEventListener('input', () => {
-        clearTimeout(timer);
-        const q = input.value.trim();
-        hideSuggest(listId);
-        addLocal();
-        if (!hpKey || q.length < 2 || /^https?:/i.test(q)) return;
-        const my = ++token;
-        timer = setTimeout(async () => {
-          let shops = [], failed = '';
-          try { shops = await hpSearch(q); }
-          catch (e) { failed = hpErrText(e); }
-          if (my !== token || input.value.trim() !== q) return;
-          box.innerHTML = '';
-          addLocal();
-          if (failed) {
-            const n = document.createElement('div'); n.className = 'item muted'; n.textContent = failed; box.appendChild(n);
-            box.hidden = false;
-            return;
-          }
-          shops.forEach(sh => {
-            const info = hpInfo(sh);
-            if (!info) return;
-            const it = document.createElement('div'); it.className = 'item';
-            const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = sh.name;
-            const sb = document.createElement('div'); sb.className = 'sb';
-            sb.textContent = [sh.genre && sh.genre.name, sh.access].filter(Boolean).join('　');
-            it.append(nm, sb);
-            it.onclick = () => onPick(info);
-            box.appendChild(it);
-          });
-          if (!box.children.length) {
-            const n = document.createElement('div'); n.className = 'item muted'; n.textContent = 'ホットペッパーに見つかりませんでした。下のボタンで名前だけ追加できます'; box.appendChild(n);
-          }
-          const cr = document.createElement('div'); cr.className = 'credit';
-          cr.innerHTML = '<a href="https://webservice.recruit.co.jp/" target="_blank" rel="noopener noreferrer">Powered by ホットペッパー グルメ Webサービス</a>';
-          box.appendChild(cr);
-          box.hidden = false;
-        }, 400);
-      });
+      input.addEventListener('input', () => { hideSuggest(listId); addLocal(); });
     }
 
-    // ---------- 距離（ホットペッパーの検索で、ロタに近い店を選ぶのに使う）----------
-    function distM(a, b) {
-      const R = 6371000, rad = x => x * Math.PI / 180;
-      const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
-      const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
-      return 2 * R * Math.asin(Math.sqrt(h));
-    }
     // 前に使ったお店を端末に覚えておく（名前・リンク）。次からは候補に出て、1タップで載せられる。
-    // ホットペッパー由来の情報は覚えない（規約に合わせて保存しない）。
     // 一次会のお店と二次会の候補は、別々に覚える（二次会の欄に、一次会のお店が出ないように）
     let shopMemo = load('shops', {});    // 一次会：名前 → { url, at }
     let afterMemo = load('afters', {});  // 二次会：名前 → { url, at }
-    function rememberInto(memo, names, urls, hp) {
+    function rememberInto(memo, names, urls) {
       let changed = false;
       Object.entries(names || {}).forEach(([k, name]) => {
-        if (hp && hp[k]) return;
         const old = memo[name], url = safeUrl(urls && urls[k]);
         if (old && old.url === url) return;
         memo[name] = { url, at: Date.now() }; changed = true;
@@ -1229,9 +1116,9 @@
       return changed ? Object.fromEntries(Object.entries(memo).sort((x, y) => y[1].at - x[1].at).slice(0, 40)) : null;
     }
     function rememberShops() {
-      const a = rememberInto(shopMemo, roomData.shops, roomData.shopUrl, roomData.hpShops);
+      const a = rememberInto(shopMemo, roomData.shops, roomData.shopUrl);
       if (a) { shopMemo = a; save('shops', shopMemo); }
-      const b = rememberInto(afterMemo, roomData.afterShops, roomData.afterUrl, roomData.afterHp);
+      const b = rememberInto(afterMemo, roomData.afterShops, roomData.afterUrl);
       if (b) { afterMemo = b; save('afters', afterMemo); }
     }
 
@@ -1316,7 +1203,6 @@
       $('summary').classList.toggle('ok', all);
       $('badge3').hidden = !total; $('badge3').textContent = `${by.arrived.length}/${total}`; $('badge3').classList.toggle('ok', all);
       $('rosterBtn').hidden = !hasApi() || !hasFirebase;
-      $('hpCredit').hidden = !hpKey;
     }
 
     setInterval(() => { if (roomId && roomData) render(); }, 10000);
@@ -1368,37 +1254,25 @@
     }
     function copyApiLink() {
       if (!saveApi()) return;
-      const link = location.href.split('#')[0].split('?')[0] + '#u=' + encodeURIComponent(api.url)
-        + (hpKey ? '&h=' + encodeURIComponent(hpKey) : '');
+      const link = location.href.split('#')[0].split('?')[0] + '#u=' + encodeURIComponent(api.url);
       const done = () => { $('apiLinkBtn').innerHTML = ic('check') + 'コピーしました'; setTimeout(() => { $('apiLinkBtn').textContent = 'メンバーに配るリンクをコピー'; }, 2000); };
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done, () => prompt('このリンクをコピーしてください', link));
       else prompt('このリンクをコピーしてください', link);
     }
-    function saveHp() {
-      hpKey = $('hpKey').value.trim().replace(/[^A-Za-z0-9]/g, '');   // キーは英数字だけ
-      $('hpKey').value = hpKey; save('hp', hpKey);
-      if (!hpKey) { $('homeErr').textContent = 'お店の検索を使わない設定にしました'; return; }
-      $('homeErr').textContent = '保存しました。キーを確かめています…';
-      const k = hpKey;
-      hpSearch('居酒屋').then(
-        list => { if (hpKey === k) $('homeErr').textContent = `キーを確認できました。お店の検索が使えます（試しの検索で${list.length}件）`; },
-        e => { if (hpKey === k) $('homeErr').textContent = '保存しましたが、検索を試すと失敗しました：' + hpErrText(e); });
-    }
-    // 配布リンク（#u=…&h=…）や、サークル出欠のボタン（#n=名前）で開いたら、設定を保存して、アドレスから消す
+    // 配布リンク（#u=…）や、サークル出欠のボタン（#n=名前）で開いたら、設定を保存して、アドレスから消す
     (function importApiFromLink() {
       const h = new URLSearchParams(location.hash.replace(/^#/, ''));
       let used = false;
       if (h.get('u') && /^https:\/\/script\.google\.com\//.test(h.get('u'))) {
         api = { url: h.get('u') }; save('api', api); used = true;
       }
-      if (h.has('k')) used = true;   // 昔のリンクの連携キーは使わない（アドレスからは消す）
+      if (h.has('k') || h.has('h')) used = true;   // 昔のリンクのキー（連携・お店検索）は使わない（アドレスからは消す）
       // 名前：未登録の端末はそのまま登録。別の名前で登録済みなら、勝手に変えずに確認する
       const n = (h.get('n') || '').replace(/\s+/g, ' ').trim().slice(0, 30);
       if (n) {
         used = true;
         if (!myName || (myName !== n && confirm(`名前を「${myName}」から「${n}」に変更しますか？`))) { myName = n; save('name', myName); }
       }
-      if (h.get('h') && /^[A-Za-z0-9]+$/.test(h.get('h'))) { hpKey = h.get('h'); save('hp', hpKey); used = true; }
       if (used) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
     })();
     // すでに開いているタブでリンクを踏んだとき（読み込み直しが起きない）も、設定を取り込む
@@ -1408,8 +1282,6 @@
     // 起動
     // ============================================================
     if (api) $('apiUrl').value = api.url || '';
-    $('hpKey').value = hpKey;
-    $('hpSaveBtn').onclick = saveHp;
     $('modeBadge').textContent = hasFirebase ? '' : 'お試し';
     $('demoNotice').hidden = hasFirebase;
     $('openBtn').onclick = () => { autoOpen = true; openToday(); };
@@ -1445,7 +1317,7 @@
     })();
     $('heroName').onclick = renameClick;   // 名前の部分をタップすると、名前を選び直せる
     $('shopChange').onclick = () => { shopEdit = true; renderShops(); $('shopChange').hidden = true; $('shopSearch').focus(); };
-    setupSuggest('shopSearch', 'hpList', info => addShop(info), () => shopEntries().map(s => s.name), () => shopMemo, REGULAR_SHOPS);
+    setupSuggest('shopSearch', 'shopSug', info => addShop(info), () => shopEntries().map(s => s.name), () => shopMemo, REGULAR_SHOPS);
     setupSuggest('afterShop', 'afterSug', info => addAfter(info), () => afterEntries().map(s => s.name), () => afterMemo, []);   // 二次会には、一次会の履歴・いつものお店を出さない
     $('withSearch').oninput = renderWith;
     $('afterShopBtn').onclick = () => addAfter();
