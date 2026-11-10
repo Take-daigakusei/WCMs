@@ -40,7 +40,7 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     [hidden] { display: none !important; }
-    html, body { height: 100%; height: 100dvh; -webkit-text-size-adjust: 100%; }
+    html, body { height: 100%; height: 100dvh; -webkit-text-size-adjust: 100%; overscroll-behavior-y: none; }   /* 下へ引っ張っても、ページを読み込み直さない（内容は自動で更新される） */
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
       background: var(--bg); color: var(--text); line-height: 1.5; -webkit-font-smoothing: antialiased;
@@ -56,7 +56,7 @@
     #modeBadge.warn { color: var(--red); border-color: var(--red); }
     #modeBadge:not(:empty) { border: 1px solid var(--border-mid); border-radius: 6px; padding: 0 6px; margin: 0; }
     main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-    .screen { display: none; flex: 1; min-height: 0; overflow: auto; padding: var(--gap) var(--gap) 80px; gap: var(--gap); }
+    .screen { display: none; flex: 1; min-height: 0; overflow: auto; overscroll-behavior-y: contain; padding: var(--gap) var(--gap) 80px; gap: var(--gap); }
     .screen.active { display: flex; flex-direction: column; }
     .screen > * { width: 100%; max-width: 560px; margin-left: auto; margin-right: auto; flex: none; }
     .pane { display: flex; flex-direction: column; gap: var(--gap); }
@@ -209,7 +209,7 @@
     .sheet-grip { width: 40px; height: 4px; border-radius: 2px; background: var(--border-mid); margin: 4px auto 12px; }
     .sheet-title { font-size: 1rem; font-weight: 700; }
     .sheet-sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
-    .sheet-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+    .sheet-list { flex: 1; min-height: 0; overflow: auto; overscroll-behavior-y: contain; display: flex; flex-direction: column; }
     .sheet-list .who { display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-top: 1px solid var(--border); font-size: 0.95rem; }
     .sheet-list .who .av { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-2); color: var(--text-muted); display: flex; align-items: center; justify-content: center; flex: none; }
     .sheet-list .who.me { font-weight: 700; }
@@ -603,14 +603,17 @@
     }
     // 以前の「エラー表示欄」の代わり：文字を入れると赤いトーストになる（空は何もしない）
     const roomErr = { set textContent(v) { if (v) toast(v, true); } };
+    let resumeTab = 0;   // 読み込み直しのあと、最初にボードを出すときに戻すタブ（1回だけ使う）
     function show(id) {
+      const wasRoom = document.body.classList.contains('in-room');
       document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
       document.body.classList.toggle('in-room', id === 'room');
-      if (id === 'room') setTab(1);
+      if (id === 'room' && !wasRoom) { setTab(resumeTab || 1); resumeTab = 0; }
     }
     // 下のタブ：一次会（お店・自分の状況）/ 二次会 / みんなの状況
     function setTab(n) {
       closeSheet();
+      try { sessionStorage.setItem(STORE_PREFIX + 'tab', String(n)); } catch (e) {}   // 読み込み直しても、同じタブに戻れるように
       [1, 2, 3].forEach(i => { $('pane' + i).hidden = i !== n; });
       document.querySelectorAll('#bnav button').forEach(b => b.classList.toggle('on', +b.dataset.tab === n));
       $('room').scrollTop = 0;
@@ -745,6 +748,7 @@
     // ============================================================
     async function enterRoom(id) {
       roomId = id; roomData = null;
+      save('lastRoom', id);   // 読み込み直したとき、「開いています…」を挟まずにこのボードへ戻る
       myStatus = 'none'; myShop = ''; withKeys = new Set();
       $('roomDate').textContent = boardDay().label;
       roomErr.textContent = '';
@@ -1333,7 +1337,7 @@
     async function leaveRoom() {
       try { await backend.removePerson(roomId, myKey()); } catch (e) {}
       cleanupRoomView();
-      myName = ''; remove('name'); remove('nameTyped');   // 次に開いたとき、名前を選び直せる
+      myName = ''; remove('name'); remove('nameTyped'); remove('lastRoom');   // 次に開いたとき、名前を選び直せる
       autoOpen = false;
       $('openMsg').textContent = ''; $('openBtn').hidden = false; $('openBtn').textContent = '今日のボードを開く';
     }
@@ -1347,6 +1351,7 @@
     }
     function finishRoom(message) {
       cleanupRoomView();
+      remove('lastRoom');
       autoOpen = false;
       $('openMsg').textContent = ''; $('openBtn').hidden = false; $('openBtn').textContent = '今日のボードを開く';
       $('homeErr').textContent = message;
@@ -1454,9 +1459,24 @@
     window.addEventListener('unhandledrejection', e => toast('エラー：' + ((e.reason && e.reason.message) || e.reason || ''), true, 10000));
 
     (async () => {
+      // 読み込み直し（引っ張って更新など）のとき：名前があり、さっきまで今日のボードにいたなら、
+      // 「ボードを開いています…」の画面を挟まず、見ていたタブのままボードを出す
+      const today = boardDay();
+      const resume = !!myName && load('lastRoom', '') === today.id;
+      if (resume) {
+        try { resumeTab = +sessionStorage.getItem(STORE_PREFIX + 'tab') || 0; } catch (e) {}
+        $('roomDate').textContent = today.label; $('remain').textContent = '読み込み中…';
+        show('room');
+      }
       try { uid = await backend.init(); }
-      catch (e) { $('openMsg').textContent = ''; $('homeErr').textContent = 'サーバーに接続できませんでした：' + (e.message || e); return; }
-      if (autoOpen) openToday();
+      catch (e) { if (resume) show('home'); $('openMsg').textContent = ''; $('homeErr').textContent = 'サーバーに接続できませんでした：' + (e.message || e); return; }
+      if (resume) {
+        enterRoom(today.id);
+        // 名簿が古ければ、裏で取り込み直す（画面は待たせない）
+        backend.getRoom(today.id).then(room => {
+          if (hasFirebase && hasApi() && (!room || !room.rosterAt || Date.now() - room.rosterAt > ROSTER_STALE_MS)) return requestSync();
+        }).catch(() => {});
+      } else if (autoOpen) openToday();
     })();
   </script>
 </body>
