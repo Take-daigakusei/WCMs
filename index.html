@@ -398,8 +398,23 @@
     // ここに書いたお店は、全員の端末で、検索欄の候補に最初から出る（ホットペッパーに載っていない店もOK）。
     // name: 店名（20文字まで） / min: ロタまでの徒歩の分数（分からなければ書かない → 選んだときに聞く）
     // alt: 別の書き方（「サイゼリア」など）。これで打っても候補に出る
+    // 分数は、お店の位置（食べログ・OpenStreetMap）からロタまでの直線距離 ×1.3 ÷ 分速80m で出したもの
     const REGULAR_SHOPS = [
-      { name: 'たかとら', min: 3 },
+      { name: 'やったる', min: 3, alt: ['らあ麺 やったる', 'らぁ麺 やったる'] },                       // 高田馬場2-16-4
+      { name: 'たかとら', min: 3, alt: ['鷹虎', '麺屋武蔵 鷹虎'] },                                    // 高田馬場2丁目
+      { name: 'マック 高田馬場駅前店', min: 3, alt: ['マクドナルド', 'マクド'] },                       // 早稲田通り
+      { name: 'やよい軒 高田馬場店', min: 3 },                                                        // 高田馬場3-3-2
+      { name: 'やよい軒 馬場口店', min: 9 },                                                          // 早稲田通り（高田馬場2丁目）
+      { name: 'たれかつ', min: 11, alt: ['タレカツ', '新潟カツ丼 タレカツ'] },                          // 西早稲田3-27-25
+      { name: 'めんちん 高田馬場店', min: 11, alt: ['麺珍亭', '東京麺珍亭本舗', '麺珍'] },              // 高田馬場1-12-1
+      { name: 'めんちん 西早稲田店', min: 22, alt: ['麺珍亭', '東京麺珍亭本舗', '麺珍'] },              // 西早稲田2-3-25
+      { name: 'めんちん 鶴巻町本店', min: 29, alt: ['麺珍亭', '東京麺珍亭本舗', '麺珍'] },              // 戸塚町1-104-3
+      { name: '油そば学会 総本店', min: 24, alt: ['アブラ学会', 'アブラ學会', '武蔵野アブラ學会', 'あぶら学会'] },   // 西早稲田1-18-12
+      { name: '油そば学会 別館', min: 28, alt: ['アブラ学会', 'アブラ學会', '武蔵野アブラ學会', 'あぶら学会'] },     // 喜久井町65
+      { name: 'めんじい 馬場下2階店', min: 25, alt: ['麺爺', '麺爺あぶら'] },                           // 馬場下町18
+      { name: 'めんじい ラボ', min: 26, alt: ['麺爺', '麺爺ラボ'] },                                    // 馬場下町14
+      { name: 'めんじい 早稲田店', min: 28, alt: ['麺爺', '麺爺あぶら'] },                              // 早稲田町69-4
+      { name: 'マック 早稲田駅前店', min: 27, alt: ['マクドナルド', 'マクド'] },                        // 馬場下町
     ];
 
     function load(key, fallback) {
@@ -1103,7 +1118,7 @@
         const seen = new Set(memo.map(m => norm(m.name)));
         const regular = REGULAR_SHOPS.filter(r => hit(r.name, r.alt) && !seen.has(norm(r.name)))
           .map(r => ({ name: r.name.slice(0, 20), min: r.min || null, url: '', label: 'いつものお店' }));
-        [...memo, ...regular].slice(0, 6).forEach(m => {
+        [...memo, ...regular].slice(0, 8).forEach(m => {
           const it = document.createElement('div'); it.className = 'item';
           const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = m.name;
           const sb = document.createElement('div'); sb.className = 'sb'; sb.textContent = m.label + (m.min ? `　ロタまで徒歩${m.min}分` : '');
