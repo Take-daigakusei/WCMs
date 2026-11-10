@@ -428,7 +428,7 @@
       async getRoom(id) { return (await this.ref(id).get()).val(); },
       watchRoom(id, cb) {
         const r = this.ref(id);
-        const fn = r.on('value', s => cb(s.val()));
+        const fn = r.on('value', s => cb(s.val()), e => toast('ボードを読み込めませんでした：' + (e.message || e), true));
         return () => r.off('value', fn);
       },
       async setPeople(id, map) { await this.ref(id, 'people').update(map); },
@@ -700,11 +700,22 @@
       $('roomDate').textContent = boardDay().label;
       roomErr.textContent = '';
       $('shopSearch').value = ''; $('withSearch').value = '';
+      $('remain').textContent = '読み込み中…';
       show('room');
       unwatch = backend.watchRoom(id, onRoomUpdate);
+      // 保険：数秒たっても中身が届かないときは、取りに行く（それでもだめなら理由を出す）
+      setTimeout(async () => {
+        if (roomId !== id || roomData) return;
+        try { onRoomUpdate(await backend.getRoom(id)); }
+        catch (e) { toast('ボードを読み込めませんでした。電波の良い所で開き直してください（' + (e.message || e) + '）', true, 10000); }
+      }, 4000);
     }
 
     function onRoomUpdate(data) {
+      try { onRoomUpdate_(data); }
+      catch (e) { toast('表示中にエラーが起きました：' + (e.message || e), true, 10000); }
+    }
+    function onRoomUpdate_(data) {
       if (!roomId) return;
       if (!data || data.expiresAt <= Date.now()) { finishRoom('今日のボードは終了しました'); return; }
       roomData = data;
@@ -1313,6 +1324,10 @@
     $('afterShop').onkeydown = e => { if (e.key === 'Enter') addAfter(); };
     $('apiSaveBtn').onclick = () => { if (saveApi()) $('homeErr').textContent = '保存しました'; };
     $('apiLinkBtn').onclick = copyApiLink;
+
+    // 思わぬエラーは、画面に出す（スマホでは原因が見えないため）
+    window.addEventListener('error', e => toast('エラー：' + (e.message || '') + (e.lineno ? '（' + e.lineno + '行目）' : ''), true, 10000));
+    window.addEventListener('unhandledrejection', e => toast('エラー：' + ((e.reason && e.reason.message) || e.reason || ''), true, 10000));
 
     (async () => {
       try { uid = await backend.init(); }
