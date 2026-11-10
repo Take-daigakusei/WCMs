@@ -394,6 +394,14 @@
     const DETOUR = 1.3;                   // 道のり ≒ 直線距離 × 1.3
     const SEARCH_BOX = { w: 139.68, e: 139.73, s: 35.69, n: 35.735 };   // 検索するのは高田馬場まわりだけ
 
+    // ---------- いつものお店（サークルでよく行くお店）----------
+    // ここに書いたお店は、全員の端末で、検索欄の候補に最初から出る（ホットペッパーに載っていない店もOK）。
+    // name: 店名（20文字まで） / min: ロタまでの徒歩の分数（分からなければ書かない → 選んだときに聞く）
+    // alt: 別の書き方（「サイゼリア」など）。これで打っても候補に出る
+    const REGULAR_SHOPS = [
+      { name: 'たかとら', min: 3 },
+    ];
+
     function load(key, fallback) {
       try { const v = localStorage.getItem(STORE_PREFIX + key); return v === null ? fallback : JSON.parse(v); }
       catch (e) { return fallback; }
@@ -404,6 +412,7 @@
     const ic = n => `<svg class="ic" aria-hidden="true"><use href="#i-${n}"/></svg>`;   // 簡易ピクトグラム（SVGの定義は body の先頭）
     const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const ja = (a, b) => a.localeCompare(b, 'ja');
+    const kana = s => String(s).replace(/[\u3041-\u3096]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60));   // ひらがな → カタカナ
     const norm = s => String(s).normalize('NFKC').toLowerCase().replace(/\s+/g, '');   // 全角/半角・大文字/小文字・空白のちがいを無視して比べる
     // 名前・店名は { キー: 名前 } で保存する（キーは名前から作るので同じものは重複しない）
     const mapKey = name => name.replace(/[.$#\[\]\/]/g, '_');
@@ -1085,15 +1094,23 @@
         const raw = input.value.trim();
         if (/^https?:/i.test(raw)) return;
         const q = norm(raw), have = new Set(listed().map(norm));
-        Object.entries(shopMemo).filter(([n]) => (!q || norm(n).includes(q)) && !have.has(norm(n)))
-          .sort((a, b) => b[1].at - a[1].at).slice(0, 5).forEach(([n, m]) => {
-            const it = document.createElement('div'); it.className = 'item';
-            const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = n;
-            const sb = document.createElement('div'); sb.className = 'sb'; sb.textContent = '前に使ったお店' + (m.min ? `　ロタまで徒歩${m.min}分` : '');
-            it.append(nm, sb);
-            it.onclick = () => onPick({ name: n, min: m.min || null, url: safeUrl(m.url) });
-            box.appendChild(it);
-          });
+        // ひらがなで打ってもカタカナの店名に当たるようにして比べる
+        const kq = kana(q);
+        const hit = (n, alt) => !have.has(norm(n)) && (!kq || [n, ...(alt || [])].some(x => kana(norm(x)).includes(kq)));
+        // 前に使ったお店（新しい順）→ いつものお店 の順。同じ店は、端末が覚えているほう（直した分数）を優先
+        const memo = Object.entries(shopMemo).filter(([n]) => hit(n)).sort((a, b) => b[1].at - a[1].at)
+          .map(([n, m]) => ({ name: n, min: m.min || null, url: safeUrl(m.url), label: '前に使ったお店' }));
+        const seen = new Set(memo.map(m => norm(m.name)));
+        const regular = REGULAR_SHOPS.filter(r => hit(r.name, r.alt) && !seen.has(norm(r.name)))
+          .map(r => ({ name: r.name.slice(0, 20), min: r.min || null, url: '', label: 'いつものお店' }));
+        [...memo, ...regular].slice(0, 6).forEach(m => {
+          const it = document.createElement('div'); it.className = 'item';
+          const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = m.name;
+          const sb = document.createElement('div'); sb.className = 'sb'; sb.textContent = m.label + (m.min ? `　ロタまで徒歩${m.min}分` : '');
+          it.append(nm, sb);
+          it.onclick = () => onPick({ name: m.name, min: m.min, url: m.url });
+          box.appendChild(it);
+        });
         box.hidden = !box.children.length;
       };
       input.addEventListener('focus', () => { if (!input.value.trim()) { hideSuggest(listId); addLocal(); } });
