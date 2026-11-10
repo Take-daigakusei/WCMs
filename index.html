@@ -280,7 +280,7 @@
           <input id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
           <button id="apiSaveBtn" class="sub">保存する</button>
           <label for="hpKey">ホットペッパーAPIキー（お店の検索用・任意）</label>
-          <input id="hpKey" type="password" autocomplete="off">
+          <input id="hpKey" type="text" inputmode="latin" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
           <button id="hpSaveBtn" class="sub">キーを保存</button>
           <button id="apiLinkBtn" class="sub">メンバーに配るリンクをコピー</button>
           <p class="muted">配るリンクに入るのは、出欠アプリのURLとお店検索のキーだけです（名簿を読むためのキーはありません）。メンバーは一度そのリンクを開けば、あとは普通に開くだけで使えます。</p>
@@ -1019,12 +1019,21 @@
           else resolve(r.shop || []);
         });
         el.onerror = () => done(() => reject(new Error('load')));
+        el.onload = () => setTimeout(() => { if (window[cb]) done(() => reject(new Error('badkey'))); }, 50);
         el.src = 'https://webservice.recruit.co.jp/hotpepper/gourmet/v1/?' + new URLSearchParams({
           key: hpKey, keyword, lat: ROTA.lat, lng: ROTA.lng, range: 5, count: 6, format: 'jsonp', callback: cb,
         });
         document.head.appendChild(el);
       });
     }
+    const hpErrText = e => {
+      const m = (e && e.message) || '';
+      if (m === 'badkey' || /キー/.test(m)) return 'ホットペッパーのキーが正しくないようです。右上の設定で、キーを入れ直してください';
+      // キーがまちがっていると、ブラウザは返事（XML）を読み込めず 'load' になる
+      if (m === 'load') return 'ホットペッパーで検索できませんでした。キーがまちがっている可能性が高いです。右上の設定で、キーを入れ直してください';
+      if (m === 'timeout') return 'ホットペッパーにつながりませんでした。下のボタンで、名前だけで追加できます';
+      return 'ホットペッパーで検索できませんでした（' + m + '）。下のボタンで、名前だけで追加できます';
+    };
     function hpInfo(sh) {
       const name = String(sh.name || '').trim().slice(0, 20);
       if (!name) return null;
@@ -1104,11 +1113,17 @@
         if (!hpKey || q.length < 2 || /^https?:/i.test(q)) return;
         const my = ++token;
         timer = setTimeout(async () => {
-          let shops;
-          try { shops = await hpSearch(q); } catch (e) { return; }
+          let shops = [], failed = '';
+          try { shops = await hpSearch(q); }
+          catch (e) { failed = hpErrText(e); }
           if (my !== token || input.value.trim() !== q) return;
           box.innerHTML = '';
           addLocal();
+          if (failed) {
+            const n = document.createElement('div'); n.className = 'item muted'; n.textContent = failed; box.appendChild(n);
+            box.hidden = false;
+            return;
+          }
           shops.forEach(sh => {
             const info = hpInfo(sh);
             if (!info) return;
@@ -1351,7 +1366,12 @@
     function saveHp() {
       hpKey = $('hpKey').value.trim().replace(/[^A-Za-z0-9]/g, '');   // キーは英数字だけ
       $('hpKey').value = hpKey; save('hp', hpKey);
-      $('homeErr').textContent = hpKey ? '保存しました' : 'お店の検索を使わない設定にしました';
+      if (!hpKey) { $('homeErr').textContent = 'お店の検索を使わない設定にしました'; return; }
+      $('homeErr').textContent = '保存しました。キーを確かめています…';
+      const k = hpKey;
+      hpSearch('居酒屋').then(
+        list => { if (hpKey === k) $('homeErr').textContent = `キーを確認できました。お店の検索が使えます（試しの検索で${list.length}件）`; },
+        e => { if (hpKey === k) $('homeErr').textContent = '保存しましたが、検索を試すと失敗しました：' + hpErrText(e); });
     }
     // 配布リンク（#u=…&h=…）や、サークル出欠のボタン（#n=名前）で開いたら、設定を保存して、アドレスから消す
     (function importApiFromLink() {
@@ -1410,7 +1430,7 @@
     $('apiLinkBtn').onclick = copyApiLink;
 
     // 思わぬエラーは、画面に出す（スマホでは原因が見えないため）
-    window.addEventListener('error', e => toast('エラー：' + (e.message || '') + (e.lineno ? '（' + e.lineno + '行目）' : ''), true, 10000));
+    window.addEventListener('error', e => /^Script error/i.test(e.message || '') || toast('エラー：' + (e.message || '') + (e.lineno ? '（' + e.lineno + '行目）' : ''), true, 10000));
     window.addEventListener('unhandledrejection', e => toast('エラー：' + ((e.reason && e.reason.message) || e.reason || ''), true, 10000));
 
     (async () => {
