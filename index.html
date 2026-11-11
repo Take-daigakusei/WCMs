@@ -862,6 +862,14 @@
     function toggleWith(k, on) {
       const p = (roomData.people || {})[k];
       if (on) {
+        // すでに別の場所にいる人（自分で選んだ人）を、まちがって動かさないように確認する
+        if (p && !(p.st === myStatus && (p.shop || '') === myShop)) {
+          const where = p.st === 'shop' ? `「${p.shop || 'お店'}」にいます` : p.st === 'moving' ? 'ロタへ向かっています' : 'ロタに着いています';
+          const msg = myStatus === 'none'
+            ? `${p.name}さんは、すでに${where}。いっしょに行く人に入れると、あなたが状況を選んだとき、同じ状況に移ります。入れますか？`
+            : `${p.name}さんは、すでに${where}。あなたと同じ状況に移しますか？`;
+          if (!confirm(msg)) { render(); return; }
+        }
         withKeys.add(k);
         if (myStatus !== 'none') applyStatus(myStatus, myShop, [k]);
       } else {
