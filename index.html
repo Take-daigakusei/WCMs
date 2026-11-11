@@ -72,6 +72,7 @@
     body.in-room header #modeBadge:not(:empty) { margin-top: 6px; }
     #room .pane { gap: 12px; }
     #room .card { padding: 14px; }
+    #openCard { background: none; border: none; padding: 8px 0; }
     #room .card > * + *, #room #withBlock > * + * { margin-top: 10px; }
     body.in-room .toast { bottom: auto; top: calc(12px + env(safe-area-inset-top)); transform: translateX(-50%) translateY(-300px); }
     body.in-room .toast.show { transform: translateX(-50%) translateY(0); }
@@ -637,6 +638,7 @@
       } catch (e) {
         throw new Error('出欠アプリにつながりませんでした。電波の良い所でもう一度開くか、設定の出欠アプリのURLを確かめてください。');
       }
+      if (!json.ok && json.error === 'noAttendees') { const err = new Error('noAttendees'); err.code = 'noAttendees'; throw err; }
       if (!json.ok) throw new Error({
         noAttendees: '今日の出席者がまだいません。出欠アプリで出席（〇）を付けるか、練習の記録が済んでから、もう一度開いてください。',
         notSetup: '出欠アプリ側で、ボードとの連携がまだ設定されていません。',
@@ -665,7 +667,12 @@
         const stale = !room || !room.rosterAt || Date.now() - room.rosterAt > ROSTER_STALE_MS;
         if (hasFirebase && hasApi() && stale) {
           try { await requestSync(); room = await backend.getRoom(day.id); }
-          catch (e) { if (!room) throw e; }   // ボードがあるなら、取り込めなくても続けられる
+          catch (e) {
+            if (e.code === 'noAttendees') {
+              // 出席者がまだいない日（練習のない日・記録前）も、名簿なしでボードを始める。名前を入力して入れる
+              if (!room) { await backend.createRoom(day.id, { createdAt: Date.now(), expiresAt: day.expiresAt }); room = await backend.getRoom(day.id); }
+            } else if (!room) throw e;   // ボードがあるなら、取り込めなくても続けられる
+          }
         }
         if (!room && !hasFirebase) {
           room = demoRoom(day);
