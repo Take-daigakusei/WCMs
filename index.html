@@ -168,6 +168,9 @@
     .shoplist input[type=radio]:checked::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: #fff; }
     .shoplist input[type=checkbox]:checked::after { content: ""; position: absolute; left: 6px; top: 2px; width: 6px; height: 11px; border: solid #fff; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); }
     .shoplist .cnt { margin-left: auto; color: var(--text-muted); font-size: 0.75rem; font-weight: 400; white-space: nowrap; }
+    .shoplist label:has(.cnt.who) { flex-wrap: wrap; row-gap: 4px; }
+    .shoplist .cnt.who { flex: 1 0 calc(100% - 34px); order: 9; margin: 0 0 0 34px; white-space: normal; text-align: left; line-height: 1.4; }
+    .shoplist .cnt.who:empty { display: none; }
     .shoplist .cnt + .cnt { margin-left: 0; }
     .shoplist .del { color: var(--text-muted); display: flex; padding: 0 2px; }
     .shoplist .none-txt { padding: 12px; }
@@ -1017,7 +1020,8 @@
       const qn = norm(q);
       const isUrl = /^https?:\/\//i.test(q);   // URLを貼っているときは、絞り込まない
       const counts = {};
-      Object.values(roomData.people || {}).forEach(m => { if (m.st === 'shop') counts[m.shop] = (counts[m.shop] || 0) + 1; });
+      const whoAt = {};   // お店ごとの、そこにいる人の名前
+      Object.values(roomData.people || {}).forEach(m => { if (m.st === 'shop') { counts[m.shop] = (counts[m.shop] || 0) + 1; (whoAt[m.shop] = whoAt[m.shop] || []).push(m.name); } });
       const all = shopEntries();
       const list = folded ? all.filter(s => s.name === myShop) : all.filter(s => isUrl || !qn || norm(s.name).includes(qn));
       const box = $('shopList');
@@ -1032,7 +1036,7 @@
         r.onchange = () => { shopEdit = false; setStatus(myStatus === 'none' ? 'shop' : myStatus, s.name); };   // 選び直しても、いまの状況（移動中など）は変えない
         r.onclick = ev => { if (sel && myStatus === 'shop') { ev.preventDefault(); clearMe(); } };   // 選んでいるお店をもう一度押すと、選択を取り消す
         const t = document.createElement('span'); t.textContent = s.name;
-        const c = document.createElement('span'); c.className = 'cnt'; c.textContent = counts[s.name] ? counts[s.name] + '人' : '';
+        const c = document.createElement('span'); c.className = 'cnt who'; c.textContent = counts[s.name] ? whoAt[s.name].sort(ja).join('、') : '';
         const ex = shopExtra(s.name);
         const lu = ex.url;
         if (lu) t.appendChild(linkEl(lu));
