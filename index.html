@@ -154,6 +154,9 @@
     .qbtn.arrived.on { background: var(--green); border-color: var(--green); color: #fff; }
 
     /* 一覧：1行ごとに角丸の枠。選んだ行は薄い青 */
+    .gens { gap: 6px; }
+    .gens button { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 0.85rem; width: auto; min-height: 0; margin: 0; }
+    .gens button.on { background: var(--blue-soft); border-color: rgba(59,130,246,0.3); font-weight: 700; color: var(--blue); }
     .shoplist { max-height: 260px; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
     .shoplist label { display: flex; align-items: center; gap: 12px; padding: 11px 14px; font-size: 0.95rem; color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: background .12s, border-color .12s; }
     .shoplist label:active { background: var(--surface-2); }
@@ -266,6 +269,7 @@
         <p class="hint">この端末が名前を覚えます。次からは、開くだけで自分として入れます（練習に出ていない日も同じです）。</p>
         <p class="section-label"><svg class="ic"><use href="#i-users"/></svg>今日の練習に出た人：名簿から選ぶ</p>
         <input id="nameSearch" type="search" placeholder="名簿を検索" autocomplete="off">
+        <div class="chips gens" id="nameGen" hidden></div>
         <div class="shoplist" id="nameList"></div>
         <p class="section-label"><svg class="ic"><use href="#i-glass"/></svg>アフターから参加する人：名前を入力</p>
         <p class="hint">練習に出ていなくても、ここから入れます。お店を選ばずに「ロタへ向かう」「ロタに着いた」を押せます。</p>
@@ -320,6 +324,7 @@
           <p class="section-label"><svg class="ic"><use href="#i-users"/></svg> <span id="withTitle"></span> <span id="withSummary"></span></p>
           <p class="hint">チェックした人も、同じ状況になります</p>
           <input id="withSearch" type="search" placeholder="名前を検索" autocomplete="off">
+          <div class="chips gens" id="withGen" hidden></div>
           <div class="shoplist" id="withList"></div>
         </div>
       </div>
@@ -648,6 +653,7 @@
     const demoRoom = day => ({
       createdAt: Date.now(), expiresAt: day.expiresAt, rosterAt: Date.now(),
       roster: toMap(['たけし', 'あやか', 'けんた', 'みお']),
+      rosterGen: { 'たけし': '63', 'あやか': '64', 'けんた': '64', 'みお': '65' },
       shops: toMap(['サイゼリヤ', '鳥貴族', '和民']),
     });
 
@@ -709,10 +715,32 @@
       pending = null;
       $('nameCard').hidden = true; $('openCard').hidden = false;
     }
+    // 代の絞り込み（名簿に代の情報があるときだけ出す）。名前の検索と組み合わせて使える
+    const genFilter = { nameGen: '', withGen: '' };
+    function renderGenChips(boxId, keys, gens, redraw) {
+      const box = $(boxId);
+      const counts = {};
+      keys.forEach(k => { const g = gens[k]; if (g) counts[g] = (counts[g] || 0) + 1; });
+      const list = Object.keys(counts).sort((a, b) => b - a);
+      if (genFilter[boxId] && !counts[genFilter[boxId]]) genFilter[boxId] = '';
+      box.hidden = !list.length;
+      box.innerHTML = '';
+      [''].concat(list).forEach(g => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'sub' + (genFilter[boxId] === g ? ' on' : '');
+        b.textContent = g ? g + '代' : '全員';
+        b.onclick = () => { genFilter[boxId] = g; redraw(); };
+        box.appendChild(b);
+      });
+    }
     function renderNameList() {
       if (!pending) return;
       const q = norm($('nameSearch').value);
-      const roster = Object.values(pending.room.roster || {}).sort(ja);
+      const gens = pending.room.rosterGen || {};
+      const entries = Object.entries(pending.room.roster || {});
+      renderGenChips('nameGen', entries.map(e => e[0]), gens, renderNameList);
+      const g = genFilter.nameGen;
+      const roster = entries.filter(([k]) => !g || gens[k] === g).map(e => e[1]).sort(ja);
       const names = roster.filter(n => !q || norm(n).includes(q));
       const box = $('nameList');
       box.innerHTML = '';
@@ -1136,7 +1164,10 @@
       const names = allNames();
       delete names[myKey()];
       const people = roomData.people || {};
-      const list = Object.entries(names).filter(([, n]) => !q || norm(n).includes(q)).sort((a, b) => ja(a[1], b[1]));
+      const gens = roomData.rosterGen || {};
+      renderGenChips('withGen', Object.keys(names), gens, renderWith);
+      const g = genFilter.withGen;
+      const list = Object.entries(names).filter(([k, n]) => (!q || norm(n).includes(q)) && (!g || gens[k] === g)).sort((a, b) => ja(a[1], b[1]));
       const box = $('withList');
       const top = box.scrollTop;
       box.innerHTML = '';

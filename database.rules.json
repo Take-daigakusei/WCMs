@@ -12,6 +12,10 @@
           ".write": "auth != null",
           "$k": { ".validate": "newData.isString() && newData.val().length <= 30" }
         },
+        "rosterGen": {
+          ".write": "auth != null",
+          "$k": { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{1,3}$/)" }
+        },
         "shops": {
           ".write": "auth != null",
           "$k": { ".validate": "newData.isString() && newData.val().length <= 20" }
