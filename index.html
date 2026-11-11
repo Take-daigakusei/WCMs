@@ -171,6 +171,9 @@
     .shoplist label:has(.cnt.who) { flex-wrap: wrap; row-gap: 4px; }
     .shoplist .cnt.who { flex: 1 0 calc(100% - 34px); order: 9; margin: 0 0 0 34px; white-space: normal; text-align: left; line-height: 1.4; }
     .shoplist .cnt.who:empty { display: none; }
+    .shoplist .cnt.who { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pchip { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 2px 8px; font-size: 0.8rem; color: var(--text); font-weight: 400; }
+    .shoplist label.sel .pchip { background: var(--surface); }
     .shoplist .cnt + .cnt { margin-left: 0; }
     .shoplist .del { color: var(--text-muted); display: flex; padding: 0 2px; }
     .shoplist .none-txt { padding: 12px; }
@@ -1036,7 +1039,8 @@
         r.onchange = () => { shopEdit = false; setStatus(myStatus === 'none' ? 'shop' : myStatus, s.name); };   // 選び直しても、いまの状況（移動中など）は変えない
         r.onclick = ev => { if (sel && myStatus === 'shop') { ev.preventDefault(); clearMe(); } };   // 選んでいるお店をもう一度押すと、選択を取り消す
         const t = document.createElement('span'); t.textContent = s.name;
-        const c = document.createElement('span'); c.className = 'cnt who'; c.textContent = counts[s.name] ? whoAt[s.name].sort(ja).join('、') : '';
+        const c = document.createElement('span'); c.className = 'cnt who';
+        (whoAt[s.name] || []).sort(ja).forEach(n => { const p = document.createElement('span'); p.className = 'pchip'; p.textContent = n; c.appendChild(p); });
         const ex = shopExtra(s.name);
         const lu = ex.url;
         if (lu) t.appendChild(linkEl(lu));
