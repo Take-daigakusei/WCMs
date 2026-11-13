@@ -260,7 +260,7 @@
     <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.8 0 5 2.2 5 5"/></symbol>
   </svg>
   <header>
-    <span>WCMs <small>飲み会の集合ボード</small></span>
+    <span>WCMs <small>アフターの集合</small></span>
     <small id="modeBadge"></small>
   </header>
 
@@ -285,9 +285,9 @@
       </div>
 
       <div class="card" id="openCard">
-        <h2 id="openTitle">今日のボード</h2>
-        <p class="muted" id="openMsg">ボードを開いています…</p>
-        <button id="openBtn" hidden>今日のボードを開く</button>
+        <h2 id="openTitle">今日のアフター</h2>
+        <p class="muted" id="openMsg">アフターを開いています…</p>
+        <button id="openBtn" hidden>今日のアフターを開く</button>
       </div>
 
       <p class="err" id="homeErr"></p>
@@ -303,7 +303,7 @@
         </details>
       </div>
 
-      <p class="muted">位置情報は使いません。ボードは翌朝4時に自動で消えます。</p>
+      <p class="muted">位置情報は使いません。アフターは翌朝4時に自動で消えます。</p>
     </section>
 
     <!-- ボード -->
@@ -487,7 +487,7 @@
       async getRoom(id) { return (await this.ref(id).get()).val(); },
       watchRoom(id, cb) {
         const r = this.ref(id);
-        const fn = r.on('value', s => cb(s.val()), e => toast('ボードを読み込めませんでした：' + (e.message || e), true));
+        const fn = r.on('value', s => cb(s.val()), e => toast('アフターを読み込めませんでした：' + (e.message || e), true));
         return () => r.off('value', fn);
       },
       async setPeople(id, map) { await this.ref(id, 'people').update(map); },
@@ -653,7 +653,7 @@
       if (!json.ok && json.error === 'noAttendees') { const err = new Error('noAttendees'); err.code = 'noAttendees'; throw err; }
       if (!json.ok) throw new Error({
         noAttendees: '今日の出席者がまだいません。出欠アプリで出席（〇）を付けるか、練習の記録が済んでから、もう一度開いてください。',
-        notSetup: '出欠アプリ側で、ボードとの連携がまだ設定されていません。',
+        notSetup: '出欠アプリ側で、アフターとの連携がまだ設定されていません。',
       }[json.error] || '出欠アプリから名簿を取り込めませんでした');
     }
     // お試しモード用の見本のボード（出欠アプリのサーバーは Firebase にしか書き込めないため）
@@ -671,7 +671,7 @@
       $('homeErr').textContent = '';
       $('openBtn').hidden = true; $('openMsg').textContent = 'ボードを開いています…';
       const day = boardDay();
-      $('openTitle').textContent = day.label + ' のボード';
+      $('openTitle').textContent = day.label + ' のアフター';
       try {
         // 昔のボードの掃除（期限切れの日だけ消せる）
         [1, 2, 3].forEach(k => backend.deleteRoom(boardDay(Date.now() - k * 86400000).id).catch(() => {}));
@@ -691,8 +691,8 @@
           room = demoRoom(day);
           await backend.createRoom(day.id, room);
         }
-        if (!room) throw new Error(hasApi() ? '今日のボードを作れませんでした。少し待ってから、もう一度開いてください。'
-          : '今日のボードはまだ始まっていません。サークル出欠との連携が入ったリンクから開いてください。');
+        if (!room) throw new Error(hasApi() ? '今日のアフターを作れませんでした。少し待ってから、もう一度開いてください。'
+          : '今日のアフターはまだ始まっていません。サークル出欠との連携が入ったリンクから開いてください。');
 
         // 一度名前を登録した端末は、名簿にいない日（アフターから参加）でも、そのまま自分として入る
         if (myName) await enterRoom(day.id);
@@ -775,7 +775,7 @@
     function nameCancel() {
       hideNamePicker();
       autoOpen = false;
-      $('openMsg').textContent = ''; $('openBtn').hidden = false; $('openBtn').textContent = '今日のボードを開く';
+      $('openMsg').textContent = ''; $('openBtn').hidden = false; $('openBtn').textContent = '今日のアフターを開く';
     }
 
     // ============================================================
@@ -795,7 +795,7 @@
       setTimeout(async () => {
         if (roomId !== id || roomData) return;
         try { onRoomUpdate(await backend.getRoom(id)); }
-        catch (e) { toast('ボードを読み込めませんでした。電波の良い所で開き直してください（' + (e.message || e) + '）', true, 10000); }
+        catch (e) { toast('アフターを読み込めませんでした。電波の良い所で開き直してください（' + (e.message || e) + '）', true, 10000); }
       }, 4000);
     }
 
@@ -805,7 +805,7 @@
     }
     function onRoomUpdate_(data) {
       if (!roomId) return;
-      if (!data || data.expiresAt <= Date.now()) { finishRoom('今日のボードは終了しました'); return; }
+      if (!data || data.expiresAt <= Date.now()) { finishRoom('今日のアフターは終了しました'); return; }
       roomData = data;
       // 自分の状況はサーバーの内容に合わせる（再読み込み後や、幹事に動かされたときも反映される）
       const mine = (data.people || {})[myKey()];
@@ -1242,7 +1242,7 @@
       const people = roomData.people || {};
       const members = Object.entries(people).map(([key, p]) => ({ key, ...p }));
       const left = roomData.expiresAt - Date.now();
-      if (left <= 0) { finishRoom('今日のボードは終了しました'); return; }
+      if (left <= 0) { finishRoom('今日のアフターは終了しました'); return; }
       $('remain').innerHTML = ic('clock') + esc(fmtRemain(left));
 
       // 自分の状況
@@ -1308,13 +1308,13 @@
       cleanupRoomView();
       myName = ''; remove('name'); remove('nameTyped'); remove('lastRoom');   // 次に開いたとき、名前を選び直せる
       autoOpen = false;
-      $('openMsg').textContent = ''; $('openBtn').hidden = false; $('openBtn').textContent = '今日のボードを開く';
+      $('openMsg').textContent = ''; $('openBtn').hidden = false; $('openBtn').textContent = '今日のアフターを開く';
     }
     // ボードから設定（ホーム画面）へ。名前も、ボード上の自分の状況も、そのまま残す
     function openSettings() {
       cleanupRoomView();
       autoOpen = false;
-      $('openMsg').textContent = ''; $('openBtn').hidden = false; $('openBtn').textContent = 'ボードにもどる';
+      $('openMsg').textContent = ''; $('openBtn').hidden = false; $('openBtn').textContent = 'アフターにもどる';
       $('homeErr').textContent = '';
       $('apiDetails').open = true;
     }
@@ -1322,7 +1322,7 @@
       cleanupRoomView();
       remove('lastRoom');
       autoOpen = false;
-      $('openMsg').textContent = ''; $('openBtn').hidden = false; $('openBtn').textContent = '今日のボードを開く';
+      $('openMsg').textContent = ''; $('openBtn').hidden = false; $('openBtn').textContent = '今日のアフターを開く';
       $('homeErr').textContent = message;
     }
 
