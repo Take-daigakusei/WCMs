@@ -155,6 +155,9 @@
 
     /* 一覧：1行ごとに角丸の枠。選んだ行は薄い青 */
     .gens { gap: 6px; }
+    .sim { align-items: center; gap: 6px; }
+    .sim span { font-size: 0.8rem; color: var(--text-muted); }
+    .sim button { background: var(--blue-soft); color: var(--blue); border: 1px solid rgba(59,130,246,0.3); border-radius: 999px; padding: 4px 12px; font-size: 0.9rem; font-weight: 600; width: auto; min-height: 0; margin: 0; }
     .gens button { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 0.85rem; width: auto; min-height: 0; margin: 0; }
     .gens button.on { background: var(--blue-soft); border-color: rgba(59,130,246,0.3); font-weight: 700; color: var(--blue); }
     .shoplist { max-height: 260px; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
@@ -271,13 +274,11 @@
       <!-- 名前を選ぶ -->
       <div class="card" id="nameCard" hidden>
         <h2>はじめに、あなたの名前を登録</h2>
-        <p class="hint">この端末が名前を覚えます。次からは、開くだけで自分として入れます（練習に出ていない日も同じです）。</p>
         <p class="section-label"><svg class="ic"><use href="#i-users"/></svg>今日の練習に出た人：名簿から選ぶ</p>
         <input id="nameSearch" type="search" placeholder="名簿を検索" autocomplete="off">
         <div class="chips gens" id="nameGen" hidden></div>
         <div class="shoplist" id="nameList"></div>
         <p class="section-label"><svg class="ic"><use href="#i-glass"/></svg>アフターから参加する人：名前を入力</p>
-        <p class="hint">練習に出ていなくても、ここから入れます。お店を選ばずに「ロタへ向かう」「ロタに着いた」を押せます。</p>
         <input id="nameInput" maxlength="30" placeholder="例：たけし" autocomplete="off">
         <button id="nameOkBtn">この名前で入る</button>
         <button id="nameCancelBtn" class="sub">やめる</button>
@@ -321,8 +322,8 @@
         <input id="shopSearch" type="search" placeholder="お店の名前を入れて追加" autocomplete="off">
         <div class="sug" id="shopSug" hidden></div>
         <div class="shoplist" id="shopList"></div>
+        <div class="chips sim" id="shopSimilar" hidden></div>
         <button id="shopAddBtn" class="sub dash" hidden></button>
-        <p class="hint" id="shopHint" hidden>選んでいるお店をもう一度押すと、取り消せます</p>
         <button class="link" id="shopChange" hidden>別のお店に変更</button>
 
         <div id="withBlock" hidden>
@@ -352,9 +353,10 @@
       <div class="pane" id="pane2" hidden>
       <div class="card">
         <p class="card-title"><span class="t"><svg class="ic"><use href="#i-glass"/></svg>二次会の候補</span><span class="card-title-count" id="afterNow"></span></p>
-        <p class="hint">だれでも候補を出せます。行きたいお店のハートを押してください。ハートを長押しすると、押した人の一覧が出ます。</p>
+        <p class="hint">ハートを長押しすると、押した人の一覧が出ます</p>
         <input id="afterShop" placeholder="お店の名前を入れて追加" autocomplete="off">
         <div class="sug" id="afterSug" hidden></div>
+        <div class="chips sim" id="afterSimilar" hidden></div>
         <button id="afterShopBtn" class="sub dash" hidden></button>
         <div class="cands" id="afterList"></div>
       </div>
@@ -924,6 +926,7 @@
       const q = $('afterShop').value.trim();
       const isUrl = /^https?:\/\//i.test(q);
       const dup = !isUrl && list.some(c => norm(c.name) === norm(q));
+      renderSimilar('afterSimilar', q, list.map(c => c.name), name => addAfter({ name }));
       $('afterShopBtn').hidden = !q || dup;
       $('afterShopBtn').innerHTML = ic('plus') + (isUrl ? 'このURLのお店を候補に追加' : `「${esc(q)}」を名前だけで候補に追加`);
       const box = $('afterList');
@@ -962,7 +965,7 @@
         box.appendChild(row);
       });
       box.scrollTop = top;
-      if (!list.length) box.innerHTML = '<div class="none-txt">まだ候補がありません。上の欄にお店の名前を入れて追加してください</div>';
+      if (!list.length) box.innerHTML = '<div class="none-txt">まだ候補がありません</div>';
       renderSheet();   // 開いている一覧も、いまの内容に合わせる
     }
 
@@ -1064,10 +1067,38 @@
         box.appendChild(l);
       });
       box.scrollTop = top;
-      if (!list.length) box.innerHTML = `<div class="none-txt" style="padding:10px">${all.length ? '該当するお店がありません' : 'まだお店がありません。上の欄にお店の名前を入れると、追加できます'}</div>`;
+      if (!list.length) box.innerHTML = `<div class="none-txt" style="padding:10px">${all.length ? '該当するお店がありません' : 'まだお店がありません'}</div>`;
       const exact = !isUrl && all.some(s => norm(s.name) === qn);
+      renderSimilar('shopSimilar', q, all.map(s => s.name), name => addShop({ name }));
       $('shopAddBtn').hidden = !q || exact;
       $('shopAddBtn').innerHTML = ic('plus') + (isUrl ? 'このURLのお店を追加して選ぶ' : `「${esc(q)}」を追加して選ぶ`);
+    }
+
+    // 打った名前に近いお店（打ち間違い・ひらがな/カタカナ違い・少し長く書いたもの）が、すでにあれば「もしかして」と勧める。
+    // 打った文字を含むお店は、下の一覧にもう出ているので、ここには出さない
+    const simKey = s => kana(norm(s)).replace(/[・･、。\-ー〜~'’!！?？()（）「」『』]/g, '').replace(/店$/, '');
+    function editDist(a, b) {
+      const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+      for (let j = 1; j <= b.length; j++) d[0][j] = j;
+      for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      return d[a.length][b.length];
+    }
+    function renderSimilar(boxId, raw, names, onPick) {
+      const box = $(boxId);
+      box.innerHTML = '';
+      const k = simKey(raw);
+      const near = /^https?:/i.test(raw) || k.length < 2 ? [] : names.filter(n => {
+        const x = simKey(n);
+        if (!x || norm(n) === norm(raw)) return false;
+        if (x === k) return true;   // かな/カナ・「店」の有無・空白だけのちがい
+        if (x.includes(k)) return false;
+        return (k.includes(x) && x.length >= 3) || editDist(x, k) <= (k.length >= 7 ? 2 : k.length >= 3 ? 1 : 0);
+      }).slice(0, 3);
+      box.hidden = !near.length;
+      if (!near.length) return;
+      const lb = document.createElement('span'); lb.textContent = 'もしかして：'; box.appendChild(lb);
+      near.forEach(n => { const b = document.createElement('button'); b.type = 'button'; b.textContent = n; b.onclick = () => onPick(n); box.appendChild(b); });
     }
 
     async function addShop(info) {   // info: 検索結果やURLから取ったお店 { name, lat, lng, url }。なければ入力欄の名前だけで追加
@@ -1233,7 +1264,6 @@
       renderWith();
       $('withBlock').hidden = myStatus === 'none';
       $('withTitle').textContent = myStatus === 'shop' ? 'このお店に連れてきた人を追加' : 'いっしょの人';
-      $('shopHint').hidden = myStatus !== 'shop';
 
       // みんなの状況
       const by = { arrived: [], moving: [], shop: {} };
