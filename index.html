@@ -852,9 +852,17 @@
       const same = myStatus === st;   // 同じ状況のままお店だけ選び直したとき
       myStatus = st;
       if (shop !== undefined) myShop = shop;
-      applyStatus(st, myShop);
+      // 同じお店にいた人が1人だけロタへ向かうことはないので、ロタへ向かうを押したら、そのお店の全員をまとめて動かす
+      let mates = [];
+      if (st === 'moving' && myShop) {
+        mates = Object.entries((roomData && roomData.people) || {})
+          .filter(([k, p]) => k !== myKey() && p.st === 'shop' && p.shop === myShop).map(([k]) => k);
+      }
+      if (mates.length) applyStatus(st, myShop, [...new Set([myKey(), ...withKeys, ...mates])]);
+      else applyStatus(st, myShop);
       render();
-      if (same && shop !== undefined) toast(`${myShop}に変更しました`);
+      if (mates.length) toast(`${myShop}の${mates.length + 1}人で、ロタへ向かうと伝えました`);
+      else if (same && shop !== undefined) toast(`${myShop}に変更しました`);
       else if (st === 'shop') toast(`${myShop}にいると伝えました`);
       else if (st === 'moving') toast('ロタへ向かうと伝えました');
       else toast('ロタに着いたと伝えました');
