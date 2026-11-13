@@ -1023,7 +1023,7 @@
       toast(hadShop ? 'お店の選択を取り消しました' : '取り消しました');
     }
     function renameClick() {
-      if (myStatus !== 'none' && !confirm('名前を選び直すと、いまの状況は消えます。よろしいですか？')) return;
+      if (myStatus !== 'none' && !confirm('名前を選び直すと、いまの状況と「行きたい」は消えます。よろしいですか？')) return;
       leaveRoom();
     }
 
@@ -1313,6 +1313,10 @@
     }
     async function leaveRoom() {
       try { await backend.removePerson(roomId, myKey()); } catch (e) {}
+      // 二次会の「行きたい」（ハート）も、この名前の分を消す。名前を変えたあとに、前の名前のハートが残らないように
+      const likes = (roomData && roomData.afterLikes) || {};
+      await Promise.all(Object.keys(likes).filter(sk => likes[sk] && likes[sk][myKey()])
+        .map(sk => backend.setLike(roomId, sk, myKey(), null).catch(() => {})));
       cleanupRoomView();
       myName = ''; remove('name'); remove('nameTyped'); remove('lastRoom');   // 次に開いたとき、名前を選び直せる
       autoOpen = false;
