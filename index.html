@@ -645,17 +645,43 @@
       if (!hasApi()) throw new Error('出欠アプリとの連携が設定されていません');
       let json;
       try {
-        const res = await fetch(api.url + (api.url.includes('?') ? '&' : '?') + 'api=boardSync');
-        json = await res.json();
+        const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 10000);   // 出欠アプリが遅いときに、いつまでも待たない
+        try {
+          const res = await fetch(api.url + (api.url.includes('?') ? '&' : '?') + 'api=boardSync', { signal: ctl.signal });
+          json = await res.json();
+        } finally { clearTimeout(timer); }
       } catch (e) {
         throw new Error('出欠アプリにつながりませんでした。電波の良い所でもう一度開くか、設定の出欠アプリのURLを確かめてください。');
       }
+      // 今日のボードの名前（日付＋サーバーだけが知る合言葉）。日付だけでは当てられないようにしてある
+      if (typeof json.key === 'string' && /^[0-9a-f-]{32,100}$/.test(json.key)) save('roomSecret', json.key);   // 一度受け取れば、以後は出欠アプリがなくても今日のボードの名前を計算できる
+      if (typeof json.room === 'string' && /^d{8}_[0-9a-f]{16,64}$/.test(json.room)) save('roomKey', { day: boardDay().id, key: json.room });
       if (!json.ok && json.error === 'noAttendees') { const err = new Error('noAttendees'); err.code = 'noAttendees'; throw err; }
       if (!json.ok) throw new Error({
         noAttendees: '今日の出席者がまだいません。出欠アプリで出席（〇）を付けるか、練習の記録が済んでから、もう一度開いてください。',
         notSetup: '出欠アプリ側で、アフターとの連携がまだ設定されていません。',
       }[json.error] || '出欠アプリから名簿を取り込めませんでした');
     }
+    // 今日のボードの名前。連携がなければ日付、連携があれば、出欠アプリのサーバーが教えてくれた名前（まだ知らなければ null）
+    function knownRoomId(day) {
+      if (!(hasFirebase && hasApi())) return day.id;
+      const k = load('roomKey', null);
+      return (k && k.day === day.id && k.key) ? k.key : null;
+    }
+    // 受け取った合言葉から、今日のボードの名前を自分で計算する（出欠アプリのサーバーと同じ HMAC-SHA256。出欠アプリに頼らず開ける）
+    async function computeRoomId(day) {
+      const secret = load('roomSecret', '');
+      if (!secret || !(window.crypto && crypto.subtle)) return null;
+      try {
+        const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+        const sig = new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(day.id)));
+        const hex = Array.from(sig, b => b.toString(16).padStart(2, '0')).join('');
+        const key = day.id + '_' + hex.slice(0, 16);
+        save('roomKey', { day: day.id, key });
+        return key;
+      } catch (e) { return null; }
+    }
+    async function ensureRoomId(day) { return knownRoomId(day) || await computeRoomId(day); }
     // お試しモード用の見本のボード（出欠アプリのサーバーは Firebase にしか書き込めないため）
     const demoRoom = day => ({
       createdAt: Date.now(), expiresAt: day.expiresAt, rosterAt: Date.now(),
@@ -676,27 +702,36 @@
         // 昔のボードの掃除（期限切れの日だけ消せる）
         [1, 2, 3].forEach(k => backend.deleteRoom(boardDay(Date.now() - k * 86400000).id).catch(() => {}));
 
-        let room = await backend.getRoom(day.id);
+        let rid = await ensureRoomId(day);
+        if (!rid) {   // この端末がまだ合言葉を知らない（初めて・データを消した）ときだけ、出欠アプリに聞く
+          try { await requestSync(); } catch (e) { if (e.code !== 'noAttendees') throw e; }
+          rid = await ensureRoomId(day) || day.id;
+        }
+        let room = await backend.getRoom(rid);
         const stale = !room || !room.rosterAt || Date.now() - room.rosterAt > ROSTER_STALE_MS;
         if (hasFirebase && hasApi() && stale) {
-          try { await requestSync(); room = await backend.getRoom(day.id); }
-          catch (e) {
-            if (e.code === 'noAttendees') {
-              // 出席者がまだいない日（練習のない日・記録前）も、名簿なしでボードを始める。名前を入力して入れる
-              if (!room) { await backend.createRoom(day.id, { createdAt: Date.now(), expiresAt: day.expiresAt }); room = await backend.getRoom(day.id); }
-            } else if (!room) throw e;   // ボードがあるなら、取り込めなくても続けられる
+          if (room) {
+            requestSync().catch(() => {});   // ボードがあるなら、名簿の取り込みは裏で。待たずに開く（届けば画面が自動で更新される）
+          } else {
+            try { await requestSync(); rid = knownRoomId(day) || rid; room = await backend.getRoom(rid); }
+            catch (e) {
+              // 出席者がまだいない日（練習のない日・記録前）や、出欠アプリが遅い・止まっているときも、名簿なしでボードを始める。名前を入力して入れる
+              const keyKnown = !!load('roomSecret', '') || e.code === 'noAttendees';
+              if (!keyKnown) throw e;
+              await backend.createRoom(rid, { createdAt: Date.now(), expiresAt: day.expiresAt }); room = await backend.getRoom(rid);
+            }
           }
         }
         if (!room && !hasFirebase) {
           room = demoRoom(day);
-          await backend.createRoom(day.id, room);
+          await backend.createRoom(rid, room);
         }
         if (!room) throw new Error(hasApi() ? '今日のアフターを作れませんでした。少し待ってから、もう一度開いてください。'
           : '今日のアフターはまだ始まっていません。サークル出欠との連携が入ったリンクから開いてください。');
 
         // 一度名前を登録した端末は、名簿にいない日（アフターから参加）でも、そのまま自分として入る
-        if (myName) await enterRoom(day.id);
-        else showNamePicker(day.id, room);
+        if (myName) await enterRoom(rid);
+        else showNamePicker(rid, room);
       } catch (e) {
         $('openMsg').textContent = '';
         $('openBtn').hidden = false; $('openBtn').textContent = 'もう一度開く';
@@ -1434,7 +1469,8 @@
       // 読み込み直し（引っ張って更新など）のとき：名前があり、さっきまで今日のボードにいたなら、
       // 「ボードを開いています…」の画面を挟まず、見ていたタブのままボードを出す
       const today = boardDay();
-      const resume = !!myName && load('lastRoom', '') === today.id;
+      const todayRid = await ensureRoomId(today);
+      const resume = !!myName && !!todayRid && load('lastRoom', '') === todayRid;
       if (resume) {
         try { resumeTab = +sessionStorage.getItem(STORE_PREFIX + 'tab') || 0; } catch (e) {}
         $('roomDate').textContent = today.label; $('remain').textContent = '読み込み中…';
@@ -1443,9 +1479,9 @@
       try { uid = await backend.init(); }
       catch (e) { if (resume) show('home'); $('openMsg').textContent = ''; $('homeErr').textContent = 'サーバーに接続できませんでした：' + (e.message || e); return; }
       if (resume) {
-        enterRoom(today.id);
+        enterRoom(todayRid);
         // 名簿が古ければ、裏で取り込み直す（画面は待たせない）
-        backend.getRoom(today.id).then(room => {
+        backend.getRoom(todayRid).then(room => {
           if (hasFirebase && hasApi() && (!room || !room.rosterAt || Date.now() - room.rosterAt > ROSTER_STALE_MS)) return requestSync();
         }).catch(() => {});
       } else if (autoOpen) openToday();
